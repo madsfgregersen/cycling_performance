@@ -3,6 +3,7 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
+from . import readiness, telegram
 from .activity_log import log_event
 from .models import HealthSample
 
@@ -91,4 +92,10 @@ def ingest_payload(db: Session, payload: dict) -> dict:
         "payload_received",
         f"saved {saved}, skipped {skipped}, by_metric {by_metric}",
     )
+
+    # health-data-arrived trigger, per the locked architecture: roll
+    # CTL/ATL/TSB and push the morning verdict (deduped to once/day).
+    readiness.recompute(db)
+    telegram.send_morning_verdict(db)
+
     return {"saved": saved, "skipped_existing": skipped, "by_metric": by_metric}

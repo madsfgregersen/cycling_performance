@@ -109,6 +109,7 @@ input[type=date],input[type=number],input[type=text],select{font:inherit;font-si
 .sw-block.sel{border:1.5px solid var(--violet);box-shadow:0 0 0 1px var(--violet)}
 .sw-block .wn{font-family:var(--mono);font-size:10px;color:var(--faint)}
 .sw-block .wl{font-size:11px;font-weight:600;margin-top:2px}
+.sw-block .wd{font-size:10px;color:var(--faint);margin-top:2px}
 .sw-block.build{background:#EEF5F1}
 .sw-block.recovery{background:#F3F1EC;color:var(--muted)}
 .sw-block.specificity{background:var(--violet-bg)}
@@ -578,6 +579,13 @@ function loadPlan(){
 
 function daysBetween(a,b){ return Math.round((b-a)/(1000*60*60*24)); }
 
+function weekRangeLabel(w){
+  var s=new Date(w.start+'T00:00:00'), e=new Date(w.end+'T00:00:00');
+  var startStr=s.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+  var endStr=(s.getMonth()===e.getMonth())?(''+e.getDate()):e.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+  return startStr+'–'+endStr;
+}
+
 function showWeekDetail(w){
   document.querySelectorAll('.sw-block').forEach(function(el){el.classList.remove('sel');});
   var blocks=document.getElementById('struct-weeks').children;
@@ -605,7 +613,8 @@ function loadPlanOverview(){
     data.weeks.forEach(function(w){
       var el=document.createElement('div');
       el.className='sw-block '+w.phase;
-      el.innerHTML='<div class="wn">W'+w.week+'</div><div class="wl">'+escapeHtml(w.label)+'</div>';
+      el.innerHTML='<div class="wn">W'+w.week+'</div><div class="wl">'+escapeHtml(w.label)+'</div>'
+        +'<div class="wd">'+escapeHtml(weekRangeLabel(w))+'</div>';
       el.onclick=(function(w){ return function(){ showWeekDetail(w); }; })(w);
       strip.appendChild(el);
     });

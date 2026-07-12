@@ -8,9 +8,9 @@ from sqlalchemy.orm import Session
 from .activity_log import log_event
 from .models import DailyReadiness, IntegrationLog, TelegramCheckin
 
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
-TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "").strip()
 
 API_BASE = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
@@ -95,8 +95,13 @@ def process_update(db: Session, update: dict) -> dict:
         return {"handled": False, "reason": "no message"}
 
     chat_id = message.get("chat", {}).get("id")
-    if TELEGRAM_CHAT_ID and str(chat_id) != str(TELEGRAM_CHAT_ID):
-        log_event(db, "telegram", "message_ignored", f"unknown chat_id {chat_id}")
+    if TELEGRAM_CHAT_ID and str(chat_id).strip() != TELEGRAM_CHAT_ID:
+        log_event(
+            db,
+            "telegram",
+            "message_ignored",
+            f"chat_id {chat_id!r} != configured {TELEGRAM_CHAT_ID!r}",
+        )
         return {"handled": False, "reason": "unknown chat"}
 
     text = message.get("text")

@@ -5,6 +5,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from . import strava
+from .activity_log import log_event
 from .models import RideStream, RideSummary
 
 ACTIVITIES_URL = "https://www.strava.com/api/v3/athlete/activities"
@@ -112,6 +113,7 @@ def _save_ride_streams(db: Session, ride_id: int, streams: dict) -> int:
 def ingest_single_activity(db: Session, activity_id: int) -> dict:
     activity = strava.get_activity(db, activity_id)
     if activity.get("type") != "Ride":
+        log_event(db, "strava_webhook", "ride_skipped", f"activity {activity_id} is not a Ride")
         return {"imported": False, "reason": "not a Ride"}
 
     exists = (
@@ -120,11 +122,18 @@ def ingest_single_activity(db: Session, activity_id: int) -> dict:
         .first()
     )
     if exists:
+        log_event(db, "strava_webhook", "ride_skipped", f"activity {activity_id} already exists")
         return {"imported": False, "reason": "already exists"}
 
     ride = _save_ride_summary(db, activity)
     streams = _fetch_streams(db, activity_id)
     stream_rows = _save_ride_streams(db, ride.id, streams)
+    log_event(
+        db,
+        "strava_webhook",
+        "ride_created",
+        f"activity {activity_id} imported, {stream_rows} stream rows",
+    )
     return {"imported": True, "stream_rows_saved": stream_rows}
 
 
@@ -135,11 +144,13 @@ def delete_activity(db: Session, activity_id: int) -> dict:
         .first()
     )
     if ride is None:
+        log_event(db, "strava_webhook", "ride_delete_skipped", f"activity {activity_id} not found")
         return {"deleted": False}
 
     db.query(RideStream).filter(RideStream.ride_id == ride.id).delete()
     db.delete(ride)
     db.commit()
+    log_event(db, "strava_webhook", "ride_deleted", f"activity {activity_id} deleted")
     return {"deleted": True}
 
 
@@ -166,6 +177,13 @@ def run_backfill(db: Session) -> dict:
         imported += 1
         time.sleep(0.5)  # stay comfortably under Strava's rate limit
 
+    log_event(
+        db,
+        "strava_backfill",
+        "backfill_run",
+        f"found {len(activities)}, imported {imported}, skipped {skipped}, "
+        f"{stream_rows} stream rows",
+    )
     return {
         "found": len(activities),
         "imported": imported,

@@ -27,6 +27,18 @@ svg{display:block;width:100%}
 header.top{background:rgba(251,251,250,.92);backdrop-filter:blur(8px);border-bottom:.5px solid var(--line);padding:14px 20px;margin-bottom:18px}
 header.top .inner{max-width:900px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px}
 .brand{font-weight:600;letter-spacing:-.01em}
+.nav{display:flex;gap:4px;background:#F0EEE8;padding:3px;border-radius:999px}
+.nav a{font-size:13px;padding:6px 14px;border-radius:999px;text-decoration:none;color:var(--muted);cursor:pointer}
+.nav a.on{background:#fff;color:var(--ink);box-shadow:0 0 0 .5px var(--line)}
+.view{display:none}
+.view.show{display:block}
+
+.logtbl{width:100%;border-collapse:collapse;font-size:13px}
+.logtbl th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);font-weight:600;padding:6px 10px;border-bottom:.5px solid var(--line)}
+.logtbl td{padding:7px 10px;border-bottom:.5px solid var(--line);vertical-align:top}
+.logtbl td.ts{font-family:var(--mono);color:var(--muted);white-space:nowrap;font-size:12px}
+.logtbl td.src{white-space:nowrap}
+.srcpill{font-size:11px;padding:2px 8px;border-radius:999px;background:#F0EEE8;color:var(--muted)}
 
 .hero{display:flex;gap:26px;align-items:center;flex-wrap:wrap}
 .verd{display:flex;flex-direction:column;gap:5px;min-width:120px}
@@ -51,7 +63,12 @@ header.top .inner{max-width:900px;margin:0 auto;display:flex;align-items:center;
 <body>
 <header class="top"><div class="inner">
 <div class="brand">Cycling performance</div>
+<nav class="nav">
+<a data-v="now" class="on" onclick="showView('now')">Now</a>
+<a data-v="logs" onclick="showView('logs')">Logs</a>
+</nav>
 </div></header>
+<section id="view-now" class="view show">
 <div class="wrap">
 
   <div class="card">
@@ -101,8 +118,30 @@ header.top .inner{max-width:900px;margin:0 auto;display:flex;align-items:center;
   </div>
 
 </div>
+</section>
+<section id="view-logs" class="view">
+<div class="wrap">
+  <div class="card">
+    <div class="tilehd" style="margin-bottom:8px">
+      <span class="lbl">Recent communication with data sources</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="logtbl">
+        <thead><tr><th>Time</th><th>Source</th><th>Event</th><th>Detail</th></tr></thead>
+        <tbody id="log-rows"></tbody>
+      </table>
+    </div>
+    <div id="log-empty" class="empty" style="display:none">No events logged yet</div>
+  </div>
+</div>
+</section>
 <div id="tt"></div>
 <script>
+function showView(v){
+  document.querySelectorAll('.view').forEach(function(el){el.classList.remove('show');});
+  document.getElementById('view-'+v).classList.add('show');
+  document.querySelectorAll('.nav a').forEach(function(a){a.classList.toggle('on', a.dataset.v===v);});
+}
 var NS='http://www.w3.org/2000/svg';
 function E(t,a){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);return e;}
 function vb(s){var b=s.getAttribute('viewBox').split(' ');return{w:+b[2],h:+b[3]};}
@@ -230,6 +269,21 @@ fetch('/dashboard/data').then(function(r){return r.json();}).then(function(data)
     var hh=Math.floor(sleepLast),mm=Math.round((sleepLast-hh)*60);
     document.getElementById('sleep-latest').textContent=hh+':'+(mm<10?'0':'')+mm;
   }
+});
+
+function escapeHtml(s){var d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
+
+fetch('/logs').then(function(r){return r.json();}).then(function(rows){
+  if(rows.length===0){ document.getElementById('log-empty').style.display='block'; return; }
+  var body=document.getElementById('log-rows');
+  rows.forEach(function(row){
+    var tr=document.createElement('tr');
+    tr.innerHTML='<td class="ts">'+escapeHtml(row.timestamp)+'</td>'
+      +'<td class="src"><span class="srcpill">'+escapeHtml(row.source)+'</span></td>'
+      +'<td>'+escapeHtml(row.event)+'</td>'
+      +'<td>'+escapeHtml(row.summary)+'</td>';
+    body.appendChild(tr);
+  });
 });
 </script>
 </body>

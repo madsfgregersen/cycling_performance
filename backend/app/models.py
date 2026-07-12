@@ -112,6 +112,21 @@ class StravaToken(Base):
     )
 
 
+class IntegrationLog(Base):
+    """Audit trail of inbound communication from external data sources
+    (Strava webhook/backfill, Health Auto Export, later Telegram) --
+    including no-op events, so a receipt can be confirmed even when it
+    produced no new data."""
+
+    __tablename__ = "integration_log"
+
+    id = Column(Integer, primary_key=True)
+    source = Column(String, nullable=False)
+    event = Column(String, nullable=False)
+    summary = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class PlannedWorkout(Base):
     """Bucket 6: future date + target TSS; editable/provisional."""
 

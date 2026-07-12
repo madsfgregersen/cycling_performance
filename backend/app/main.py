@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from . import backfill, dashboard, health_ingest, readiness, strava, strava_webhook
+from . import activity_log, backfill, dashboard, health_ingest, readiness, strava, strava_webhook
 from .database import engine, get_db
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -109,3 +109,8 @@ def strava_webhook_subscribe(request: Request):
 @app.get("/strava/webhook/status")
 def strava_webhook_status():
     return strava_webhook.get_subscription()
+
+
+@app.get("/logs")
+def logs(db: Session = Depends(get_db)):
+    return activity_log.recent_events(db)

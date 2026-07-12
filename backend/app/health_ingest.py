@@ -3,6 +3,7 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
+from .activity_log import log_event
 from .models import HealthSample
 
 HAE_INGEST_TOKEN = os.environ.get("HAE_INGEST_TOKEN", "")
@@ -84,4 +85,10 @@ def ingest_payload(db: Session, payload: dict) -> dict:
         skipped += len(samples) - count
 
     db.commit()
+    log_event(
+        db,
+        "health_ingest",
+        "payload_received",
+        f"saved {saved}, skipped {skipped}, by_metric {by_metric}",
+    )
     return {"saved": saved, "skipped_existing": skipped, "by_metric": by_metric}

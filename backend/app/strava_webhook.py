@@ -3,6 +3,7 @@ import os
 import httpx
 
 from . import backfill, readiness
+from .activity_log import log_event
 from .database import SessionLocal
 from .strava import STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET
 
@@ -38,15 +39,22 @@ def process_event(event: dict) -> None:
     aspect_type = event.get("aspect_type")
     object_id = event.get("object_id")
 
-    if object_type != "activity" or object_id is None:
-        return
-    # aspect_type == "update" is intentionally ignored for now -- only
-    # new rides landing and rides being removed are handled.
-    if aspect_type not in ("create", "delete"):
-        return
-
     db = SessionLocal()
     try:
+        if object_type != "activity" or object_id is None:
+            log_event(db, "strava_webhook", "event_ignored", f"{event}")
+            return
+        # aspect_type == "update" is intentionally ignored for now -- only
+        # new rides landing and rides being removed are handled.
+        if aspect_type not in ("create", "delete"):
+            log_event(
+                db,
+                "strava_webhook",
+                "event_ignored",
+                f"activity {object_id} aspect_type={aspect_type}",
+            )
+            return
+
         if aspect_type == "create":
             backfill.ingest_single_activity(db, object_id)
         elif aspect_type == "delete":

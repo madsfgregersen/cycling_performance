@@ -3,7 +3,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from . import strava
+from . import backfill, strava
 from .database import engine, get_db
 
 app = FastAPI(title="Cycling Performance API")
@@ -32,3 +32,8 @@ def strava_callback(code: str, db: Session = Depends(get_db)):
 def strava_status(db: Session = Depends(get_db)):
     athlete = strava.get_athlete_profile(db)
     return {"connected_as": f"{athlete.get('firstname')} {athlete.get('lastname')}"}
+
+
+@app.get("/backfill/rides")
+def backfill_rides(db: Session = Depends(get_db)):
+    return backfill.run_backfill(db)

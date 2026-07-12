@@ -9,8 +9,9 @@
 --paper:#FBFBFA;--card:#FFFFFF;--ink:#1B1B18;--muted:#6E6E68;--faint:#9A9A93;
 --line:#E7E4DD;--line2:#D8D5CC;
 --amber:#B0700F;--amber-bg:#FAEFD8;--green:#3B6D11;--green-bg:#EAF3DE;--red:#A32D2D;--red-bg:#FBEAEA;
---teal:#1D9E75;--coral:#D85A30;--form:#E24B4A;
+--teal:#1D9E75;--coral:#D85A30;--form:#E24B4A;--violet:#534AB7;--violet-bg:#EEEDFE;
 --deep:#0F6E56;--core:#5DCAA5;--rem:#7F77DD;
+--z1:#8A8F96;--z2:#3E7CB1;--z3:#B0700F;--z4:#C0392B;
 --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
 --mono:'SFMono-Regular',ui-monospace,'JetBrains Mono',Menlo,Consolas,monospace;
 }
@@ -59,11 +60,42 @@ header.top .inner{max-width:900px;margin:0 auto;display:flex;align-items:center;
 
 .btn{font:inherit;font-size:12px;padding:6px 14px;border:.5px solid var(--line2);background:#fff;border-radius:8px;cursor:pointer;color:var(--ink)}
 .btn:hover{border-color:var(--faint)}
-input[type=date],input[type=number],input[type=text]{font:inherit;font-size:13px;padding:6px 9px;border:.5px solid var(--line2);border-radius:8px;background:#fff}
-.field-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
-.field-row label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:4px}
+input[type=date],input[type=number],input[type=text],select{font:inherit;font-size:13px;padding:6px 9px;border:.5px solid var(--line2);border-radius:8px;background:#fff}
 
-@media(max-width:720px){ .grid3{grid-template-columns:1fr} .hero{gap:16px} }
+.wkhd{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+.wknav{display:flex;align-items:center;gap:10px}
+.wknav .arw{width:26px;height:26px;border-radius:7px;border:.5px solid var(--line2);background:#fff;cursor:pointer;color:var(--muted);font-size:14px}
+.wk-summary{font-size:12px;color:var(--muted);display:flex;gap:14px}
+.wk-summary b{font-family:var(--mono);color:var(--ink);font-weight:500}
+
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.day{background:#FAF9F6;border:.5px solid var(--line);border-radius:9px;min-height:110px;padding:6px;display:flex;flex-direction:column;gap:5px}
+.day .dh{font-size:10px;color:var(--faint);text-align:center}
+.day.today{border-color:var(--violet)}
+.day.today .dh{color:var(--violet);font-weight:600}
+.wo{border-radius:7px;padding:5px 6px;font-size:11px;line-height:1.3;cursor:pointer;border-left:3px solid var(--z2);background:#EAF1F7}
+.wo .t{font-weight:600;display:block}
+.wo .m{font-family:var(--mono);color:var(--muted);font-size:10px}
+.wo.z1{background:#EEF0F2;border-color:var(--z1)}
+.wo.z2{background:#EAF1F7;border-color:var(--z2)}
+.wo.z3{background:var(--amber-bg);border-color:var(--z3)}
+.wo.z4{background:#F9E9E7;border-color:var(--z4)}
+.wo.z5{background:#F9E9E7;border-color:var(--z4)}
+.add{margin-top:auto;border:1px dashed var(--line2);background:none;border-radius:6px;color:var(--faint);font-size:15px;cursor:pointer;padding:2px}
+.add:hover{color:var(--violet);border-color:var(--violet)}
+
+.modal-bg{position:fixed;inset:0;background:rgba(20,20,18,.32);display:none;align-items:center;justify-content:center;z-index:60}
+.modal-bg.on{display:flex}
+.modal{background:#fff;border-radius:14px;padding:20px;width:300px;box-shadow:0 12px 40px rgba(0,0,0,.2)}
+.modal h3{margin:0 0 2px;font-size:15px}
+.modal .sub{font-size:12px;color:var(--faint);margin-bottom:14px}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:4px}
+.field input,.field select{width:100%}
+.modal .foot{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.primary{background:var(--violet);color:#fff;border:none;border-radius:8px;padding:8px 16px;font:inherit;font-size:13px;cursor:pointer}
+
+@media(max-width:720px){ .grid3{grid-template-columns:1fr} .hero{gap:16px} .week{grid-template-columns:repeat(7,minmax(70px,1fr));overflow-x:auto} }
 </style>
 </head>
 <body>
@@ -130,13 +162,20 @@ input[type=date],input[type=number],input[type=text]{font:inherit;font-size:13px
 <div class="wrap">
 
   <div class="card">
-    <div class="tilehd" style="margin-bottom:8px"><span class="lbl">Add planned workout</span></div>
-    <div class="field-row">
-      <div><label>Date</label><input type="date" id="pw-date"></div>
-      <div><label>Target TSS</label><input type="number" id="pw-tss" style="width:90px"></div>
-      <div style="flex:1;min-width:160px"><label>Notes</label><input type="text" id="pw-notes" style="width:100%"></div>
-      <button class="btn" onclick="addWorkout()">Add</button>
+    <div class="wkhd">
+      <div class="wknav">
+        <button class="arw" onclick="navWeek(-1)">&#8249;</button>
+        <strong id="wk-label" style="font-size:14px"></strong>
+        <button class="arw" onclick="navWeek(1)">&#8250;</button>
+      </div>
+      <div class="wk-summary">
+        <span>Total <b id="wk-tss">0</b> TSS</span>
+        <span><b id="wk-count">0</b> workouts</span>
+        <span>ramp <b id="wk-ramp">&mdash;</b></span>
+      </div>
     </div>
+    <div class="week" id="week-grid"></div>
+    <div class="cap" style="margin-top:8px">tap a workout to edit, or + to add &middot; <b style="color:var(--z1)">&#9632;</b> Z1 <b style="color:var(--z2)">&#9632;</b> Z2 <b style="color:var(--z3)">&#9632;</b> Z3 <b style="color:var(--z4)">&#9632;</b> Z4/Z5</div>
   </div>
 
   <div class="card" style="margin-top:12px">
@@ -153,17 +192,36 @@ input[type=date],input[type=number],input[type=text]{font:inherit;font-size:13px
     </div>
   </div>
 
-  <div class="card" style="margin-top:12px">
-    <div class="tilehd" style="margin-bottom:8px"><span class="lbl">Upcoming planned workouts</span></div>
-    <div style="overflow-x:auto">
-      <table class="logtbl">
-        <thead><tr><th>Date</th><th>Target TSS</th><th>Notes</th><th></th></tr></thead>
-        <tbody id="pw-rows"></tbody>
-      </table>
-    </div>
-    <div id="pw-empty" class="empty" style="display:none">No planned workouts yet</div>
-  </div>
+</div>
 
+<div class="modal-bg" id="wo-modal">
+  <div class="modal">
+    <h3 id="wo-modal-title">Add workout</h3>
+    <div class="sub" id="wo-modal-date"></div>
+    <div class="field">
+      <label>Zone</label>
+      <select id="wo-zone">
+        <option value="z1">Z1 &middot; Recovery</option>
+        <option value="z2" selected>Z2 &middot; Endurance</option>
+        <option value="z3">Z3 &middot; Tempo</option>
+        <option value="z4">Z4 &middot; Threshold</option>
+        <option value="z5">Z5 &middot; VO2 / hills</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Target TSS</label>
+      <input type="number" id="wo-tss" value="60">
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <input type="text" id="wo-notes">
+    </div>
+    <div class="foot">
+      <button class="btn" id="wo-delete-btn" onclick="deleteWorkoutModal()" style="display:none;margin-right:auto;color:var(--red);border-color:var(--red)">Delete</button>
+      <button class="btn" onclick="closeWorkoutModal()">Cancel</button>
+      <button class="primary" onclick="saveWorkoutModal()">Save</button>
+    </div>
+  </div>
 </div>
 </section>
 <section id="view-logs" class="view">
@@ -349,20 +407,119 @@ fetch('/dashboard/data').then(function(r){return r.json();}).then(function(data)
 function escapeHtml(s){var d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
 
 var plannedWorkoutsCache=[];
+var weekOffset=0;
+var editingId=null;
+var modalDate=null;
 
-function renderPlannedWorkouts(){
-  var body=document.getElementById('pw-rows');
-  body.innerHTML='';
-  if(plannedWorkoutsCache.length===0){ document.getElementById('pw-empty').style.display='block'; return; }
-  document.getElementById('pw-empty').style.display='none';
-  plannedWorkoutsCache.forEach(function(w){
-    var tr=document.createElement('tr');
-    tr.innerHTML='<td>'+escapeHtml(w.date)+'</td>'
-      +'<td>'+(w.target_tss!=null?w.target_tss:'—')+'</td>'
-      +'<td>'+escapeHtml(w.notes||'')+'</td>'
-      +'<td><button class="btn" onclick="deleteWorkout('+w.id+')">Delete</button></td>';
-    body.appendChild(tr);
+function pad2(n){ return n<10?'0'+n:''+n; }
+function fmtDate(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+function fmtLabel(d){ return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
+function mondayOf(d){
+  var day=d.getDay(); // 0=Sun..6=Sat
+  var diff=(day===0?-6:1-day);
+  var m=new Date(d); m.setDate(d.getDate()+diff); m.setHours(0,0,0,0);
+  return m;
+}
+function zoneLabel(z){
+  var m={z1:'Z1 Recovery',z2:'Z2 Endurance',z3:'Z3 Tempo',z4:'Z4 Threshold',z5:'Z5 VO2/hills'};
+  return m[z]||'Workout';
+}
+function weekDays(monday){
+  var days=[];
+  for(var i=0;i<7;i++){ var dd=new Date(monday); dd.setDate(monday.getDate()+i); days.push(dd); }
+  return days;
+}
+function weekTotalTss(days){
+  var byDate={};
+  plannedWorkoutsCache.forEach(function(w){ (byDate[w.date]=byDate[w.date]||[]).push(w); });
+  var total=0;
+  days.forEach(function(dd){ (byDate[fmtDate(dd)]||[]).forEach(function(w){ total+=w.target_tss||0; }); });
+  return total;
+}
+
+function renderWeek(){
+  var today=new Date(); today.setHours(0,0,0,0);
+  var monday=mondayOf(today);
+  monday.setDate(monday.getDate()+weekOffset*7);
+  var days=weekDays(monday);
+
+  document.getElementById('wk-label').textContent=fmtLabel(days[0])+' – '+fmtLabel(days[6]);
+
+  var byDate={};
+  plannedWorkoutsCache.forEach(function(w){ (byDate[w.date]=byDate[w.date]||[]).push(w); });
+
+  var grid=document.getElementById('week-grid');
+  grid.innerHTML='';
+  var dayNames=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  var total=0, count=0;
+  days.forEach(function(dd,i){
+    var key=fmtDate(dd);
+    var isToday=(fmtDate(today)===key);
+    var cell=document.createElement('div');
+    cell.className='day'+(isToday?' today':'');
+    var dh=document.createElement('div');
+    dh.className='dh';
+    dh.textContent=dayNames[i]+' '+dd.getDate();
+    cell.appendChild(dh);
+    (byDate[key]||[]).forEach(function(w){
+      total+=w.target_tss||0; count++;
+      var wo=document.createElement('div');
+      wo.className='wo '+(w.zone||'z2');
+      wo.innerHTML='<span class="t">'+escapeHtml(w.notes||zoneLabel(w.zone))+'</span>'
+        +'<span class="m">'+(w.target_tss!=null?Math.round(w.target_tss)+' TSS':'')+'</span>';
+      wo.onclick=(function(w){ return function(){ openWorkoutModal(w.date, w); }; })(w);
+      cell.appendChild(wo);
+    });
+    var addBtn=document.createElement('button');
+    addBtn.className='add'; addBtn.textContent='+';
+    addBtn.onclick=(function(key){ return function(){ openWorkoutModal(key, null); }; })(key);
+    cell.appendChild(addBtn);
+    grid.appendChild(cell);
   });
+
+  document.getElementById('wk-tss').textContent=Math.round(total);
+  document.getElementById('wk-count').textContent=count;
+
+  var prevMonday=new Date(monday); prevMonday.setDate(monday.getDate()-7);
+  var prevTotal=weekTotalTss(weekDays(prevMonday));
+  document.getElementById('wk-ramp').textContent = prevTotal>0
+    ? (total>=prevTotal?'+':'')+Math.round((total-prevTotal)/prevTotal*100)+'%'
+    : '—';
+}
+
+function navWeek(delta){ weekOffset+=delta; renderWeek(); }
+
+function openWorkoutModal(dateStr, workout){
+  modalDate=dateStr;
+  editingId=workout?workout.id:null;
+  document.getElementById('wo-modal-title').textContent=workout?'Edit workout':'Add workout';
+  document.getElementById('wo-modal-date').textContent=dateStr;
+  document.getElementById('wo-zone').value=workout?(workout.zone||'z2'):'z2';
+  document.getElementById('wo-tss').value=workout?(workout.target_tss!=null?workout.target_tss:''):60;
+  document.getElementById('wo-notes').value=workout?(workout.notes||''):'';
+  document.getElementById('wo-delete-btn').style.display=workout?'inline-block':'none';
+  document.getElementById('wo-modal').classList.add('on');
+}
+
+function closeWorkoutModal(){ document.getElementById('wo-modal').classList.remove('on'); }
+
+function saveWorkoutModal(){
+  var tssVal=document.getElementById('wo-tss').value;
+  var body={
+    date: modalDate,
+    zone: document.getElementById('wo-zone').value,
+    target_tss: tssVal?parseFloat(tssVal):null,
+    notes: document.getElementById('wo-notes').value||null
+  };
+  var req = editingId
+    ? fetch('/planned-workouts/'+editingId, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
+    : fetch('/planned-workouts', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  req.then(function(){ closeWorkoutModal(); loadPlan(); });
+}
+
+function deleteWorkoutModal(){
+  if(!editingId) return;
+  fetch('/planned-workouts/'+editingId, {method:'DELETE'}).then(function(){ closeWorkoutModal(); loadPlan(); });
 }
 
 function loadPlan(){
@@ -371,31 +528,10 @@ function loadPlan(){
     fetch('/planned-workouts/projection').then(function(r){return r.json();})
   ]).then(function(results){
     plannedWorkoutsCache=results[0];
-    renderPlannedWorkouts();
+    renderWeek();
     var history=(dashboardData&&dashboardData.load_history||[]).slice(-14);
     loadChart('plan-load', history, results[1]);
   });
-}
-
-function addWorkout(){
-  var dateVal=document.getElementById('pw-date').value;
-  if(!dateVal) return;
-  var tssVal=document.getElementById('pw-tss').value;
-  var notesVal=document.getElementById('pw-notes').value;
-  fetch('/planned-workouts', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({date:dateVal, target_tss: tssVal?parseFloat(tssVal):null, notes: notesVal||null})
-  }).then(function(){
-    document.getElementById('pw-date').value='';
-    document.getElementById('pw-tss').value='';
-    document.getElementById('pw-notes').value='';
-    loadPlan();
-  });
-}
-
-function deleteWorkout(id){
-  fetch('/planned-workouts/'+id, {method:'DELETE'}).then(function(){ loadPlan(); });
 }
 
 fetch('/logs').then(function(r){return r.json();}).then(function(rows){

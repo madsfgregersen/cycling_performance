@@ -135,6 +135,7 @@ class PlannedWorkout(Base):
     id = Column(Integer, primary_key=True)
     date = Column(Date, nullable=False)
     target_tss = Column(Float, nullable=True)
+    zone = Column(String, nullable=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(

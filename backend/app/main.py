@@ -24,7 +24,9 @@ from .database import engine, get_db
 class PlannedWorkoutIn(BaseModel):
     date: date_type
     target_tss: Optional[float] = None
+    zone: Optional[str] = None
     notes: Optional[str] = None
+
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -141,7 +143,9 @@ def list_planned_workouts(db: Session = Depends(get_db)):
 
 @app.post("/planned-workouts")
 def create_planned_workout(workout: PlannedWorkoutIn, db: Session = Depends(get_db)):
-    return planned_workouts.create_workout(db, workout.date, workout.target_tss, workout.notes)
+    return planned_workouts.create_workout(
+        db, workout.date, workout.target_tss, workout.zone, workout.notes
+    )
 
 
 @app.put("/planned-workouts/{workout_id}")
@@ -149,7 +153,7 @@ def update_planned_workout(
     workout_id: int, workout: PlannedWorkoutIn, db: Session = Depends(get_db)
 ):
     result = planned_workouts.update_workout(
-        db, workout_id, workout.date, workout.target_tss, workout.notes
+        db, workout_id, workout.date, workout.target_tss, workout.zone, workout.notes
     )
     if result is None:
         raise HTTPException(status_code=404, detail="not found")

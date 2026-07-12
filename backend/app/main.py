@@ -3,7 +3,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from . import backfill, strava
+from . import backfill, readiness, strava
 from .database import engine, get_db
 
 app = FastAPI(title="Cycling Performance API")
@@ -37,3 +37,8 @@ def strava_status(db: Session = Depends(get_db)):
 @app.get("/backfill/rides")
 def backfill_rides(db: Session = Depends(get_db)):
     return backfill.run_backfill(db)
+
+
+@app.get("/readiness/recompute")
+def readiness_recompute(db: Session = Depends(get_db)):
+    return readiness.recompute(db)

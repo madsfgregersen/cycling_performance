@@ -1,3 +1,4 @@
+import json
 import os
 
 import anthropic
@@ -24,3 +25,20 @@ def ask_claude(prompt: str, max_tokens: int = 1024) -> str:
         messages=[{"role": "user", "content": prompt}],
     )
     return "".join(block.text for block in response.content if block.type == "text")
+
+
+def ask_claude_structured(prompt: str, system: str, schema: dict, max_tokens: int = 1024) -> dict:
+    """Like ask_claude, but constrains the response to the given JSON schema
+    and returns the parsed object. Returns {} if not configured."""
+    if _client is None:
+        return {}
+
+    response = _client.messages.create(
+        model=ANTHROPIC_MODEL,
+        max_tokens=max_tokens,
+        system=system,
+        messages=[{"role": "user", "content": prompt}],
+        output_config={"format": {"type": "json_schema", "schema": schema}},
+    )
+    text = "".join(block.text for block in response.content if block.type == "text")
+    return json.loads(text) if text else {}

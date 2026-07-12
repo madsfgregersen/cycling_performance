@@ -13,6 +13,7 @@ from . import (
     ai_coach,
     backfill,
     coach_context,
+    coach_morning,
     dashboard,
     health_ingest,
     planned_workouts,
@@ -213,3 +214,13 @@ def coach_context_endpoint(db: Session = Depends(get_db)):
 def coach_test_ping():
     text = ai_coach.ask_claude("Reply with exactly one short sentence confirming you received this.")
     return {"configured": bool(ai_coach.ANTHROPIC_API_KEY), "response": text}
+
+
+@app.get("/coach/morning-context")
+def coach_morning_context(db: Session = Depends(get_db)):
+    return coach_morning.build_morning_context(db)
+
+
+@app.get("/coach/verdict-preview")
+def coach_verdict_preview(db: Session = Depends(get_db)):
+    return coach_morning.explain_verdict(db)

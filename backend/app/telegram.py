@@ -5,8 +5,14 @@ from datetime import timezone as dt_timezone
 import httpx
 from sqlalchemy.orm import Session
 
+from . import coach_morning
 from .activity_log import log_event
 from .models import DailyReadiness, IntegrationLog, TelegramCheckin
+
+ASK_SUBJECTIVE = (
+    'How fresh do you feel today, and how\'s work/life stress? '
+    'Reply with two numbers 1-5 (e.g. "4, 2").'
+)
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
@@ -76,17 +82,32 @@ def send_morning_verdict(db: Session) -> dict:
         log_event(db, "telegram", "verdict_skipped", "no readiness data yet")
         return {"sent": False, "reason": "no data"}
 
-    text = (
-        f"{_verdict_emoji(latest.verdict)} Morning readiness: "
-        f"{(latest.verdict or 'unknown').capitalize()}\n"
-        f"TSB {latest.tsb:+.1f} · CTL {latest.ctl:.1f} · ATL {latest.atl:.1f}\n"
-        f"As of {latest.date.isoformat()}"
-    )
+    explanation = coach_morning.explain_verdict(db)
+    emoji = _verdict_emoji(latest.verdict)
+
+    if explanation:
+        text = (
+            f"{emoji} {explanation['headline']}\n\n"
+            f"{explanation['why']}\n\n"
+            f"{explanation['note']}\n\n"
+            f"{ASK_SUBJECTIVE}"
+        ).strip()
+    else:
+        # Fallback if the coach call isn't configured or fails -- the
+        # original plain verdict message, so the morning message never
+        # just goes silent.
+        text = (
+            f"{emoji} Morning readiness: {(latest.verdict or 'unknown').capitalize()}\n"
+            f"TSB {latest.tsb:+.1f} · CTL {latest.ctl:.1f} · ATL {latest.atl:.1f}\n"
+            f"As of {latest.date.isoformat()}\n\n"
+            f"{ASK_SUBJECTIVE}"
+        )
+
     sent = send_message(text)
     log_event(
         db, "telegram", "verdict_sent" if sent else "verdict_send_failed", text.replace("\n", " | ")
     )
-    return {"sent": sent}
+    return {"sent": sent, "coach_explained": bool(explanation)}
 
 
 def process_update(db: Session, update: dict) -> dict:

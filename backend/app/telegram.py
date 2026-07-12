@@ -5,7 +5,7 @@ from datetime import timezone as dt_timezone
 import httpx
 from sqlalchemy.orm import Session
 
-from . import coach_morning
+from . import coach_morning, messaging_settings
 from .activity_log import log_event
 from .models import DailyReadiness, IntegrationLog, TelegramCheckin
 
@@ -74,6 +74,9 @@ def _already_sent_today(db: Session) -> bool:
 
 
 def send_morning_verdict(db: Session) -> dict:
+    if not messaging_settings.is_enabled(db, "morning_verdict"):
+        return {"sent": False, "reason": "disabled in messaging settings"}
+
     if _already_sent_today(db):
         return {"sent": False, "reason": "already sent today"}
 

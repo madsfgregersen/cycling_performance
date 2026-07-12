@@ -1,4 +1,5 @@
 from sqlalchemy import (
+    Boolean,
     Column,
     Date,
     DateTime,
@@ -125,6 +126,19 @@ class IntegrationLog(Base):
     event = Column(String, nullable=False)
     summary = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class MessagingSetting(Base):
+    """On/off toggle per proactive message type (see messaging_settings.py
+    for the catalog). A missing row means enabled -- default-on."""
+
+    __tablename__ = "messaging_settings"
+
+    key = Column(String, primary_key=True)
+    enabled = Column(Boolean, nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class PlannedWorkout(Base):

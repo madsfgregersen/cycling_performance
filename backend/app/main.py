@@ -16,6 +16,7 @@ from . import (
     coach_morning,
     dashboard,
     health_ingest,
+    messaging_settings,
     planned_workouts,
     race_plan,
     readiness,
@@ -31,6 +32,10 @@ class PlannedWorkoutIn(BaseModel):
     target_tss: Optional[float] = None
     zone: Optional[str] = None
     notes: Optional[str] = None
+
+
+class MessagingSettingIn(BaseModel):
+    enabled: bool
 
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -224,3 +229,15 @@ def coach_morning_context(db: Session = Depends(get_db)):
 @app.get("/coach/verdict-preview")
 def coach_verdict_preview(db: Session = Depends(get_db)):
     return coach_morning.explain_verdict(db)
+
+
+@app.get("/messaging/settings")
+def messaging_settings_list(db: Session = Depends(get_db)):
+    return messaging_settings.list_settings(db)
+
+
+@app.post("/messaging/settings/{key}")
+def messaging_settings_update(
+    key: str, setting: MessagingSettingIn, db: Session = Depends(get_db)
+):
+    return messaging_settings.set_enabled(db, key, setting.enabled)

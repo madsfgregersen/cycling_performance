@@ -117,6 +117,18 @@ input[type=date],input[type=number],input[type=text],select{font:inherit;font-si
 .struct-detail{margin-top:10px;padding:10px 12px;border:.5px solid var(--line);border-radius:9px;font-size:13px;line-height:1.5;background:#FAF9F6}
 .struct-detail .sd-hd{font-weight:600;margin-bottom:4px}
 
+.msgrow{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:.5px solid var(--line)}
+.msgrow:last-child{border-bottom:none}
+.msgrow .mtext{flex:1}
+.msgrow .mlabel{font-weight:600;font-size:13.5px;display:flex;align-items:center;gap:7px}
+.msgrow .mdesc{font-size:12.5px;color:var(--muted);margin-top:2px}
+.badge-soon{font-size:10px;font-weight:500;color:var(--faint);background:#F0EEE8;border-radius:999px;padding:2px 8px;text-transform:uppercase;letter-spacing:.03em}
+.toggle{position:relative;width:38px;height:22px;border-radius:999px;background:var(--line2);border:none;cursor:pointer;flex-shrink:0;padding:0}
+.toggle.on{background:var(--green)}
+.toggle .knob{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.toggle.on .knob{left:18px}
+.toggle:disabled{cursor:not-allowed;opacity:.6}
+
 @media(max-width:720px){ .grid3{grid-template-columns:1fr} .hero{gap:16px} .week{grid-template-columns:repeat(7,minmax(70px,1fr));overflow-x:auto} .struct-weeks{grid-template-columns:repeat(7,minmax(60px,1fr));overflow-x:auto} }
 </style>
 </head>
@@ -126,6 +138,7 @@ input[type=date],input[type=number],input[type=text],select{font:inherit;font-si
 <nav class="nav">
 <a data-v="now" class="on" onclick="showView('now')">Now</a>
 <a data-v="plan" onclick="showView('plan')">Plan</a>
+<a data-v="messaging" onclick="showView('messaging')">Messaging</a>
 <a data-v="logs" onclick="showView('logs')">Logs</a>
 </nav>
 </div></header>
@@ -264,6 +277,17 @@ input[type=date],input[type=number],input[type=text],select{font:inherit;font-si
       <button class="btn" onclick="closeWorkoutModal()">Cancel</button>
       <button class="primary" onclick="saveWorkoutModal()">Save</button>
     </div>
+  </div>
+</div>
+</section>
+<section id="view-messaging" class="view">
+<div class="wrap">
+  <div class="card">
+    <div class="tilehd" style="margin-bottom:8px">
+      <span class="lbl">Proactive messages &mdash; toggle what the coach is allowed to send</span>
+    </div>
+    <div id="msg-rows"></div>
+    <div id="msg-empty" class="empty" style="display:none">Could not load messaging settings</div>
   </div>
 </div>
 </section>
@@ -626,6 +650,43 @@ function loadPlanOverview(){
 }
 
 loadPlanOverview();
+
+function renderMessaging(rows){
+  var container=document.getElementById('msg-rows');
+  container.innerHTML='';
+  rows.forEach(function(m){
+    var row=document.createElement('div');
+    row.className='msgrow';
+    var text=document.createElement('div');
+    text.className='mtext';
+    text.innerHTML='<div class="mlabel">'+escapeHtml(m.label)+(m.built?'':' <span class="badge-soon">not built yet</span>')+'</div>'
+      +'<div class="mdesc">'+escapeHtml(m.description)+'</div>';
+    row.appendChild(text);
+    var btn=document.createElement('button');
+    btn.className='toggle'+(m.enabled?' on':'');
+    btn.innerHTML='<span class="knob"></span>';
+    btn.onclick=function(){ toggleMessaging(m.key, btn); };
+    row.appendChild(btn);
+    container.appendChild(row);
+  });
+}
+
+function toggleMessaging(key, btn){
+  var nextEnabled=!btn.classList.contains('on');
+  btn.disabled=true;
+  fetch('/messaging/settings/'+key, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({enabled:nextEnabled})
+  }).then(function(r){return r.json();}).then(function(){
+    btn.classList.toggle('on', nextEnabled);
+    btn.disabled=false;
+  }).catch(function(){ btn.disabled=false; });
+}
+
+fetch('/messaging/settings').then(function(r){return r.json();}).then(function(rows){
+  renderMessaging(rows);
+}).catch(function(){
+  document.getElementById('msg-empty').style.display='block';
+});
 
 fetch('/logs').then(function(r){return r.json();}).then(function(rows){
   if(rows.length===0){ document.getElementById('log-empty').style.display='block'; return; }

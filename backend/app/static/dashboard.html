@@ -95,7 +95,28 @@ input[type=date],input[type=number],input[type=text],select{font:inherit;font-si
 .modal .foot{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 .primary{background:var(--violet);color:#fff;border:none;border-radius:8px;padding:8px 16px;font:inherit;font-size:13px;cursor:pointer}
 
-@media(max-width:720px){ .grid3{grid-template-columns:1fr} .hero{gap:16px} .week{grid-template-columns:repeat(7,minmax(70px,1fr));overflow-x:auto} }
+.goal{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.goal .flag{width:34px;height:34px;border-radius:9px;background:var(--violet-bg);color:var(--violet);display:flex;align-items:center;justify-content:center;font-size:17px}
+.goal .title{font-weight:600;font-size:16px}
+.goal .facts{display:flex;gap:16px;font-size:13px;color:var(--muted);flex-wrap:wrap;margin-top:2px}
+.goal .facts b{font-family:var(--mono);color:var(--ink);font-weight:500}
+.goal .count{margin-left:auto;text-align:right}
+.goal .count .n{font-family:var(--mono);font-size:24px;font-weight:600;letter-spacing:-.02em}
+
+.struct-weeks{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.sw-block{border:.5px solid var(--line);border-radius:8px;padding:8px 6px;cursor:pointer;text-align:center;background:#fff}
+.sw-block:hover{border-color:var(--faint)}
+.sw-block.sel{border:1.5px solid var(--violet);box-shadow:0 0 0 1px var(--violet)}
+.sw-block .wn{font-family:var(--mono);font-size:10px;color:var(--faint)}
+.sw-block .wl{font-size:11px;font-weight:600;margin-top:2px}
+.sw-block.build{background:#EEF5F1}
+.sw-block.recovery{background:#F3F1EC;color:var(--muted)}
+.sw-block.specificity{background:var(--violet-bg)}
+.sw-block.taper{background:var(--amber-bg)}
+.struct-detail{margin-top:10px;padding:10px 12px;border:.5px solid var(--line);border-radius:9px;font-size:13px;line-height:1.5;background:#FAF9F6}
+.struct-detail .sd-hd{font-weight:600;margin-bottom:4px}
+
+@media(max-width:720px){ .grid3{grid-template-columns:1fr} .hero{gap:16px} .week{grid-template-columns:repeat(7,minmax(70px,1fr));overflow-x:auto} .struct-weeks{grid-template-columns:repeat(7,minmax(60px,1fr));overflow-x:auto} }
 </style>
 </head>
 <body>
@@ -162,6 +183,27 @@ input[type=date],input[type=number],input[type=text],select{font:inherit;font-si
 <div class="wrap">
 
   <div class="card">
+    <div class="goal">
+      <div class="flag">&#127937;</div>
+      <div>
+        <div class="title" id="goal-name">&mdash;</div>
+        <div class="facts">
+          <span id="goal-date">&mdash;</span>
+          <span><b id="goal-distance">&mdash;</b> km</span>
+          <span><b id="goal-elevation">&mdash;</b> m climbing</span>
+        </div>
+      </div>
+      <div class="count"><div class="n" id="goal-days">&mdash;</div><div class="cap">days to go</div></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <div class="tilehd" style="margin-bottom:8px"><span class="lbl">Plan structure &mdash; 7 weeks to race day</span></div>
+    <div class="struct-weeks" id="struct-weeks"></div>
+    <div id="struct-detail" class="struct-detail" style="display:none"></div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
     <div class="wkhd">
       <div class="wknav">
         <button class="arw" onclick="navWeek(-1)">&#8249;</button>
@@ -533,6 +575,48 @@ function loadPlan(){
     loadChart('plan-load', history, results[1]);
   });
 }
+
+function daysBetween(a,b){ return Math.round((b-a)/(1000*60*60*24)); }
+
+function showWeekDetail(w){
+  document.querySelectorAll('.sw-block').forEach(function(el){el.classList.remove('sel');});
+  var blocks=document.getElementById('struct-weeks').children;
+  if(blocks[w.week-1]) blocks[w.week-1].classList.add('sel');
+  var detail=document.getElementById('struct-detail');
+  detail.style.display='block';
+  detail.innerHTML='<div class="sd-hd">Week '+w.week+' &middot; '+escapeHtml(w.start)+' – '+escapeHtml(w.end)+' &middot; '+escapeHtml(w.label)+'</div>'
+    +'<div>'+escapeHtml(w.focus)+'. '+escapeHtml(w.detail)+'</div>';
+}
+
+function loadPlanOverview(){
+  fetch('/plan/overview').then(function(r){return r.json();}).then(function(data){
+    var goal=data.goal;
+    document.getElementById('goal-name').textContent=goal.name;
+    var eventDate=new Date(goal.date+'T00:00:00');
+    document.getElementById('goal-date').textContent=eventDate.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+    document.getElementById('goal-distance').textContent=goal.distance_km;
+    document.getElementById('goal-elevation').textContent=goal.elevation_m;
+    var today=new Date(); today.setHours(0,0,0,0);
+    var days=daysBetween(today, eventDate);
+    document.getElementById('goal-days').textContent = days>=0 ? days : 0;
+
+    var strip=document.getElementById('struct-weeks');
+    strip.innerHTML='';
+    data.weeks.forEach(function(w){
+      var el=document.createElement('div');
+      el.className='sw-block '+w.phase;
+      el.innerHTML='<div class="wn">W'+w.week+'</div><div class="wl">'+escapeHtml(w.label)+'</div>';
+      el.onclick=(function(w){ return function(){ showWeekDetail(w); }; })(w);
+      strip.appendChild(el);
+    });
+
+    var todayStr=fmtDate(today);
+    var current=data.weeks.find(function(w){ return todayStr>=w.start && todayStr<=w.end; });
+    if(current) showWeekDetail(current);
+  });
+}
+
+loadPlanOverview();
 
 fetch('/logs').then(function(r){return r.json();}).then(function(rows){
   if(rows.length===0){ document.getElementById('log-empty').style.display='block'; return; }

@@ -14,6 +14,7 @@ from . import (
     dashboard,
     health_ingest,
     planned_workouts,
+    race_plan,
     readiness,
     strava,
     strava_webhook,
@@ -168,3 +169,8 @@ def delete_planned_workout(workout_id: int, db: Session = Depends(get_db)):
 @app.get("/planned-workouts/projection")
 def planned_workouts_projection(db: Session = Depends(get_db)):
     return readiness.project_forward(db)
+
+
+@app.get("/plan/overview")
+def plan_overview():
+    return race_plan.get_overview()

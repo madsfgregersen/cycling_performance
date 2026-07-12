@@ -10,7 +10,9 @@ from sqlalchemy.orm import Session
 
 from . import (
     activity_log,
+    ai_coach,
     backfill,
+    coach_context,
     dashboard,
     health_ingest,
     planned_workouts,
@@ -200,3 +202,14 @@ def telegram_webhook_status():
 @app.get("/telegram/test")
 def telegram_test(db: Session = Depends(get_db)):
     return telegram.send_morning_verdict(db)
+
+
+@app.get("/coach/context")
+def coach_context_endpoint(db: Session = Depends(get_db)):
+    return coach_context.get_coach_context(db)
+
+
+@app.get("/coach/test-ping")
+def coach_test_ping():
+    text = ai_coach.ask_claude("Reply with exactly one short sentence confirming you received this.")
+    return {"configured": bool(ai_coach.ANTHROPIC_API_KEY), "response": text}

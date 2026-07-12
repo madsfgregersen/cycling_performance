@@ -109,6 +109,40 @@ def _save_ride_streams(db: Session, ride_id: int, streams: dict) -> int:
     return len(rows)
 
 
+def ingest_single_activity(db: Session, activity_id: int) -> dict:
+    activity = strava.get_activity(db, activity_id)
+    if activity.get("type") != "Ride":
+        return {"imported": False, "reason": "not a Ride"}
+
+    exists = (
+        db.query(RideSummary)
+        .filter(RideSummary.strava_activity_id == activity_id)
+        .first()
+    )
+    if exists:
+        return {"imported": False, "reason": "already exists"}
+
+    ride = _save_ride_summary(db, activity)
+    streams = _fetch_streams(db, activity_id)
+    stream_rows = _save_ride_streams(db, ride.id, streams)
+    return {"imported": True, "stream_rows_saved": stream_rows}
+
+
+def delete_activity(db: Session, activity_id: int) -> dict:
+    ride = (
+        db.query(RideSummary)
+        .filter(RideSummary.strava_activity_id == activity_id)
+        .first()
+    )
+    if ride is None:
+        return {"deleted": False}
+
+    db.query(RideStream).filter(RideStream.ride_id == ride.id).delete()
+    db.delete(ride)
+    db.commit()
+    return {"deleted": True}
+
+
 def run_backfill(db: Session) -> dict:
     activities = _fetch_activities(db)
 

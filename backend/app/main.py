@@ -1,11 +1,11 @@
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from . import backfill, dashboard, health_ingest, readiness, strava
+from . import backfill, dashboard, health_ingest, readiness, strava, strava_webhook
 from .database import engine, get_db
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -66,3 +66,35 @@ def dashboard_page():
 @app.get("/dashboard/data")
 def dashboard_data(db: Session = Depends(get_db)):
     return dashboard.get_dashboard_data(db)
+
+
+@app.get("/strava/webhook")
+def strava_webhook_verify(
+    hub_mode: str = Query(..., alias="hub.mode"),
+    hub_challenge: str = Query(..., alias="hub.challenge"),
+    hub_verify_token: str = Query(..., alias="hub.verify_token"),
+):
+    if (
+        not strava_webhook.STRAVA_WEBHOOK_VERIFY_TOKEN
+        or hub_verify_token != strava_webhook.STRAVA_WEBHOOK_VERIFY_TOKEN
+    ):
+        raise HTTPException(status_code=403, detail="invalid verify token")
+    return {"hub.challenge": hub_challenge}
+
+
+@app.post("/strava/webhook")
+async def strava_webhook_receive(request: Request, background_tasks: BackgroundTasks):
+    event = await request.json()
+    background_tasks.add_task(strava_webhook.process_event, event)
+    return {"status": "received"}
+
+
+@app.get("/strava/webhook/subscribe")
+def strava_webhook_subscribe(request: Request):
+    callback_url = str(request.base_url) + "strava/webhook"
+    return strava_webhook.create_subscription(callback_url)
+
+
+@app.get("/strava/webhook/status")
+def strava_webhook_status():
+    return strava_webhook.get_subscription()

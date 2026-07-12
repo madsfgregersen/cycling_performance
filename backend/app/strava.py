@@ -76,6 +76,17 @@ def get_valid_access_token(db: Session) -> str:
     return token.access_token
 
 
+def get_activity(db: Session, activity_id: int) -> dict:
+    access_token = get_valid_access_token(db)
+    response = httpx.get(
+        f"https://www.strava.com/api/v3/activities/{activity_id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
 def get_athlete_profile(db: Session) -> dict:
     access_token = get_valid_access_token(db)
     response = httpx.get(

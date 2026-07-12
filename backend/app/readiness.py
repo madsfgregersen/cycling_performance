@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
-from .models import DailyReadiness, RideSummary
+from .models import DailyReadiness, PlannedWorkout, RideSummary
 
 FTP_WATTS = float(os.environ.get("FTP_WATTS", "315"))
 
@@ -71,3 +71,38 @@ def recompute(db: Session) -> dict:
 
     db.commit()
     return {"rides_updated": rides_updated, "days_computed": days_computed}
+
+
+def project_forward(db: Session, horizon_days: int = 14) -> list:
+    # Compute-on-demand only, per the locked architecture -- never written
+    # back to daily_readiness (Bucket 5 is sacred, actual history only).
+    latest = db.query(DailyReadiness).order_by(DailyReadiness.date.desc()).first()
+    if latest is None:
+        return []
+
+    end_date = latest.date + timedelta(days=horizon_days)
+    planned = (
+        db.query(PlannedWorkout)
+        .filter(PlannedWorkout.date > latest.date, PlannedWorkout.date <= end_date)
+        .all()
+    )
+    planned_tss_by_date = defaultdict(float)
+    for workout in planned:
+        planned_tss_by_date[workout.date] += workout.target_tss or 0.0
+
+    ctl = latest.ctl or 0.0
+    atl = latest.atl or 0.0
+    current = latest.date
+    projection = []
+    for _ in range(horizon_days):
+        current += timedelta(days=1)
+        tss_today = planned_tss_by_date.get(current, 0.0)
+        tsb = ctl - atl
+        ctl = ctl + (tss_today - ctl) / CTL_DAYS
+        atl = atl + (tss_today - atl) / ATL_DAYS
+
+        projection.append(
+            {"date": current.isoformat(), "ctl": ctl, "atl": atl, "tsb": tsb}
+        )
+
+    return projection

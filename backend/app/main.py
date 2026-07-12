@@ -1,12 +1,30 @@
+from datetime import date as date_type
 from pathlib import Path
+from typing import Optional
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, RedirectResponse
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from . import activity_log, backfill, dashboard, health_ingest, readiness, strava, strava_webhook
+from . import (
+    activity_log,
+    backfill,
+    dashboard,
+    health_ingest,
+    planned_workouts,
+    readiness,
+    strava,
+    strava_webhook,
+)
 from .database import engine, get_db
+
+
+class PlannedWorkoutIn(BaseModel):
+    date: date_type
+    target_tss: Optional[float] = None
+    notes: Optional[str] = None
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -114,3 +132,35 @@ def strava_webhook_status():
 @app.get("/logs")
 def logs(db: Session = Depends(get_db)):
     return activity_log.recent_events(db)
+
+
+@app.get("/planned-workouts")
+def list_planned_workouts(db: Session = Depends(get_db)):
+    return planned_workouts.list_workouts(db)
+
+
+@app.post("/planned-workouts")
+def create_planned_workout(workout: PlannedWorkoutIn, db: Session = Depends(get_db)):
+    return planned_workouts.create_workout(db, workout.date, workout.target_tss, workout.notes)
+
+
+@app.put("/planned-workouts/{workout_id}")
+def update_planned_workout(
+    workout_id: int, workout: PlannedWorkoutIn, db: Session = Depends(get_db)
+):
+    result = planned_workouts.update_workout(
+        db, workout_id, workout.date, workout.target_tss, workout.notes
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="not found")
+    return result
+
+
+@app.delete("/planned-workouts/{workout_id}")
+def delete_planned_workout(workout_id: int, db: Session = Depends(get_db)):
+    return planned_workouts.delete_workout(db, workout_id)
+
+
+@app.get("/planned-workouts/projection")
+def planned_workouts_projection(db: Session = Depends(get_db)):
+    return readiness.project_forward(db)

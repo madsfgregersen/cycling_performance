@@ -57,6 +57,12 @@ header.top .inner{max-width:900px;margin:0 auto;display:flex;align-items:center;
 
 .empty{color:var(--faint);font-size:13px;padding:20px 0;text-align:center}
 
+.btn{font:inherit;font-size:12px;padding:6px 14px;border:.5px solid var(--line2);background:#fff;border-radius:8px;cursor:pointer;color:var(--ink)}
+.btn:hover{border-color:var(--faint)}
+input[type=date],input[type=number],input[type=text]{font:inherit;font-size:13px;padding:6px 9px;border:.5px solid var(--line2);border-radius:8px;background:#fff}
+.field-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.field-row label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:4px}
+
 @media(max-width:720px){ .grid3{grid-template-columns:1fr} .hero{gap:16px} }
 </style>
 </head>
@@ -65,6 +71,7 @@ header.top .inner{max-width:900px;margin:0 auto;display:flex;align-items:center;
 <div class="brand">Cycling performance</div>
 <nav class="nav">
 <a data-v="now" class="on" onclick="showView('now')">Now</a>
+<a data-v="plan" onclick="showView('plan')">Plan</a>
 <a data-v="logs" onclick="showView('logs')">Logs</a>
 </nav>
 </div></header>
@@ -115,6 +122,46 @@ header.top .inner{max-width:900px;margin:0 auto;display:flex;align-items:center;
       <div id="sleep-empty" class="empty" style="display:none">No sleep data yet</div>
       <div class="cap"><span style="color:var(--deep)">&#9632;</span> deep <span style="color:var(--core)">&#9632;</span> core <span style="color:var(--rem)">&#9632;</span> rem</div>
     </div>
+  </div>
+
+</div>
+</section>
+<section id="view-plan" class="view">
+<div class="wrap">
+
+  <div class="card">
+    <div class="tilehd" style="margin-bottom:8px"><span class="lbl">Add planned workout</span></div>
+    <div class="field-row">
+      <div><label>Date</label><input type="date" id="pw-date"></div>
+      <div><label>Target TSS</label><input type="number" id="pw-tss" style="width:90px"></div>
+      <div style="flex:1;min-width:160px"><label>Notes</label><input type="text" id="pw-notes" style="width:100%"></div>
+      <button class="btn" onclick="addWorkout()">Add</button>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <div class="tilehd" style="margin-bottom:8px">
+      <span class="lbl">Projected fitness, fatigue, form (next 14 days)</span>
+    </div>
+    <svg id="plan-load" viewBox="0 0 640 220" aria-label="Actual training load with a 14-day forward projection from planned workouts"></svg>
+    <div id="plan-load-empty" class="empty" style="display:none">No readiness history yet &mdash; run a backfill and recompute first.</div>
+    <div style="display:flex;gap:18px;font-size:12px;color:var(--muted);margin-top:4px;flex-wrap:wrap">
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:2.5px;background:var(--teal);display:inline-block"></span>Fitness (CTL)</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:2.5px;background:var(--coral);display:inline-block"></span>Fatigue (ATL)</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:2.5px;background:var(--form);display:inline-block"></span>Form (TSB)</span>
+      <span style="margin-left:auto;color:var(--faint)">solid = actual &middot; dashed = projected</span>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <div class="tilehd" style="margin-bottom:8px"><span class="lbl">Upcoming planned workouts</span></div>
+    <div style="overflow-x:auto">
+      <table class="logtbl">
+        <thead><tr><th>Date</th><th>Target TSS</th><th>Notes</th><th></th></tr></thead>
+        <tbody id="pw-rows"></tbody>
+      </table>
+    </div>
+    <div id="pw-empty" class="empty" style="display:none">No planned workouts yet</div>
   </div>
 
 </div>
@@ -211,33 +258,52 @@ function sleepTile(id, nights){
   return data[data.length-1].total;
 }
 
-function loadChart(history){
-  var s=document.getElementById('load'); if(!s) return;
-  if(history.length===0){ document.getElementById('load-empty').style.display='block'; return; }
+function loadChart(elId, history, projection){
+  var s=document.getElementById(elId); if(!s) return;
+  var emptyEl=document.getElementById(elId+'-empty');
+  if(history.length===0){ if(emptyEl) emptyEl.style.display='block'; return; }
+  projection=projection||[];
+  var all=history.concat(projection);
+  var hn=history.length, n=all.length;
   var d=vb(s);
   var padL=32,padR=16,padT=16,mainB=d.h-52,fTop=d.h-46,fBase=d.h-16;
-  var ctl=history.map(function(r){return r.ctl||0;});
-  var atl=history.map(function(r){return r.atl||0;});
-  var tsb=history.map(function(r){return r.tsb||0;});
-  var vmin=Math.min.apply(null,ctl.concat(atl))-5, vmax=Math.max.apply(null,ctl.concat(atl))+5;
-  var tmin=Math.min.apply(null,tsb), tmax=Math.max.apply(null,tsb);
+  var ctlAll=all.map(function(r){return r.ctl||0;});
+  var atlAll=all.map(function(r){return r.atl||0;});
+  var tsbAll=all.map(function(r){return r.tsb||0;});
+  var vmin=Math.min.apply(null,ctlAll.concat(atlAll))-5, vmax=Math.max.apply(null,ctlAll.concat(atlAll))+5;
+  var tmin=Math.min.apply(null,tsbAll), tmax=Math.max.apply(null,tsbAll);
   var tspan=Math.max(Math.abs(tmin),Math.abs(tmax),10);
-  function X(i){return padL+(d.w-padL-padR)*i/(history.length-1||1);}
+  function X(i){return padL+(d.w-padL-padR)*i/((n-1)||1);}
   function Y(v){return padT+(mainB-padT)*(vmax-v)/(vmax-vmin);}
   function Yf(v){return fTop+(fBase-fTop)*(tspan-v)/(2*tspan);}
   [vmin,Math.round((vmin+vmax)/2),vmax].forEach(function(tk){var y=Y(tk);s.appendChild(E('line',{x1:padL,y1:y,x2:d.w-padR,y2:y,stroke:'var(--line)','stroke-width':.5}));
     s.appendChild(txt(padL-6,y+3,Math.round(tk),'var(--faint)',10,'end',true));});
-  function line(arr,Yfn,color){
+  function seg(arr,Yfn,color,dash){
     var p=arr.map(function(v,i){return X(i).toFixed(1)+','+Yfn(v).toFixed(1);}).join(' ');
-    s.appendChild(E('polyline',{points:p,fill:'none',stroke:color,'stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round'}));
+    var o={points:p,fill:'none',stroke:color,'stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round'};
+    if(dash)o['stroke-dasharray']='5 4';
+    s.appendChild(E('polyline',o));
   }
   s.appendChild(E('line',{x1:padL,y1:Yf(0),x2:d.w-padR,y2:Yf(0),stroke:'var(--line)','stroke-width':.5}));
-  line(ctl,Y,'#1D9E75'); line(atl,Y,'#D85A30'); line(tsb,Yf,'#E24B4A');
-  var last=history[history.length-1];
-  s.appendChild(E('circle',{cx:X(history.length-1),cy:Y(last.ctl||0),r:3.5,fill:'#1D9E75'}));
-  s.appendChild(E('circle',{cx:X(history.length-1),cy:Y(last.atl||0),r:3.5,fill:'#D85A30'}));
-  var hw=(d.w-padL-padR)/(history.length-1||1);
-  history.forEach(function(row,i){
+  seg(ctlAll.slice(0,hn),Y,'#1D9E75',false);
+  seg(atlAll.slice(0,hn),Y,'#D85A30',false);
+  seg(tsbAll.slice(0,hn),Yf,'#E24B4A',false);
+  if(projection.length>0){
+    function withLead(arr){return [arr[hn-1]].concat(arr.slice(hn));}
+    function Xp(i){return X(hn-1+i);}
+    function segP(arr,Yfn,color){
+      var p=arr.map(function(v,i){return Xp(i).toFixed(1)+','+Yfn(v).toFixed(1);}).join(' ');
+      s.appendChild(E('polyline',{points:p,fill:'none',stroke:color,'stroke-width':2,'stroke-dasharray':'5 4','stroke-linejoin':'round','stroke-linecap':'round'}));
+    }
+    segP(withLead(ctlAll),Y,'#1D9E75'); segP(withLead(atlAll),Y,'#D85A30'); segP(withLead(tsbAll),Yf,'#E24B4A');
+    s.appendChild(E('line',{x1:X(hn-1),y1:padT-2,x2:X(hn-1),y2:d.h-14,stroke:'var(--line2)','stroke-width':1,'stroke-dasharray':'3 3'}));
+    s.appendChild(txt(X(hn-1),padT-5,'today','var(--faint)',10,'middle'));
+  }
+  var last=history[hn-1];
+  s.appendChild(E('circle',{cx:X(hn-1),cy:Y(last.ctl||0),r:3.5,fill:'#1D9E75'}));
+  s.appendChild(E('circle',{cx:X(hn-1),cy:Y(last.atl||0),r:3.5,fill:'#D85A30'}));
+  var hw=(d.w-padL-padR)/((n-1)||1);
+  all.forEach(function(row,i){
     var r=E('rect',{x:X(i)-hw/2,y:padT,width:hw,height:d.h-padT-14,fill:'transparent'});
     r.style.cursor='crosshair';
     r.addEventListener('mousemove',function(ev){tipShow(ev,'<span class="k">'+row.date+'</span><br>CTL <b>'+(row.ctl||0).toFixed(1)+'</b> &middot; ATL <b>'+(row.atl||0).toFixed(1)+'</b> &middot; TSB <b>'+(row.tsb||0).toFixed(1)+'</b>');});
@@ -246,7 +312,10 @@ function loadChart(history){
   });
 }
 
+var dashboardData=null;
+
 fetch('/dashboard/data').then(function(r){return r.json();}).then(function(data){
+  dashboardData=data;
   var latest=data.latest;
   if(latest){
     document.getElementById('verdict-label').textContent=latest.verdict?(latest.verdict.charAt(0).toUpperCase()+latest.verdict.slice(1)):'—';
@@ -256,7 +325,7 @@ fetch('/dashboard/data').then(function(r){return r.json();}).then(function(data)
     document.getElementById('atl-value').textContent=latest.atl!==null?latest.atl.toFixed(1):'—';
     document.getElementById('latest-date').textContent=latest.date;
   }
-  loadChart(data.load_history);
+  loadChart('load', data.load_history, []);
 
   var hrvLast=lineTile('hrv', data.recovery.hrv, '#1D9E75', 'ms', function(v){return v.toFixed(0);});
   document.getElementById('hrv-latest').textContent=hrvLast!==undefined?hrvLast.toFixed(0):'—';
@@ -269,9 +338,61 @@ fetch('/dashboard/data').then(function(r){return r.json();}).then(function(data)
     var hh=Math.floor(sleepLast),mm=Math.round((sleepLast-hh)*60);
     document.getElementById('sleep-latest').textContent=hh+':'+(mm<10?'0':'')+mm;
   }
+
+  loadPlan();
 });
 
 function escapeHtml(s){var d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
+
+var plannedWorkoutsCache=[];
+
+function renderPlannedWorkouts(){
+  var body=document.getElementById('pw-rows');
+  body.innerHTML='';
+  if(plannedWorkoutsCache.length===0){ document.getElementById('pw-empty').style.display='block'; return; }
+  document.getElementById('pw-empty').style.display='none';
+  plannedWorkoutsCache.forEach(function(w){
+    var tr=document.createElement('tr');
+    tr.innerHTML='<td>'+escapeHtml(w.date)+'</td>'
+      +'<td>'+(w.target_tss!=null?w.target_tss:'—')+'</td>'
+      +'<td>'+escapeHtml(w.notes||'')+'</td>'
+      +'<td><button class="btn" onclick="deleteWorkout('+w.id+')">Delete</button></td>';
+    body.appendChild(tr);
+  });
+}
+
+function loadPlan(){
+  Promise.all([
+    fetch('/planned-workouts').then(function(r){return r.json();}),
+    fetch('/planned-workouts/projection').then(function(r){return r.json();})
+  ]).then(function(results){
+    plannedWorkoutsCache=results[0];
+    renderPlannedWorkouts();
+    var history=(dashboardData&&dashboardData.load_history||[]).slice(-14);
+    loadChart('plan-load', history, results[1]);
+  });
+}
+
+function addWorkout(){
+  var dateVal=document.getElementById('pw-date').value;
+  if(!dateVal) return;
+  var tssVal=document.getElementById('pw-tss').value;
+  var notesVal=document.getElementById('pw-notes').value;
+  fetch('/planned-workouts', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({date:dateVal, target_tss: tssVal?parseFloat(tssVal):null, notes: notesVal||null})
+  }).then(function(){
+    document.getElementById('pw-date').value='';
+    document.getElementById('pw-tss').value='';
+    document.getElementById('pw-notes').value='';
+    loadPlan();
+  });
+}
+
+function deleteWorkout(id){
+  fetch('/planned-workouts/'+id, {method:'DELETE'}).then(function(){ loadPlan(); });
+}
 
 fetch('/logs').then(function(r){return r.json();}).then(function(rows){
   if(rows.length===0){ document.getElementById('log-empty').style.display='block'; return; }

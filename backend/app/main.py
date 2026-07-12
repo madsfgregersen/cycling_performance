@@ -1,9 +1,9 @@
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from . import backfill, readiness, strava
+from . import backfill, health_ingest, readiness, strava
 from .database import engine, get_db
 
 app = FastAPI(title="Cycling Performance API")
@@ -42,3 +42,13 @@ def backfill_rides(db: Session = Depends(get_db)):
 @app.get("/readiness/recompute")
 def readiness_recompute(db: Session = Depends(get_db)):
     return readiness.recompute(db)
+
+
+@app.post("/health/ingest")
+async def ingest_health_data(
+    request: Request, token: str = "", db: Session = Depends(get_db)
+):
+    if not health_ingest.HAE_INGEST_TOKEN or token != health_ingest.HAE_INGEST_TOKEN:
+        raise HTTPException(status_code=401, detail="invalid token")
+    payload = await request.json()
+    return health_ingest.ingest_payload(db, payload)

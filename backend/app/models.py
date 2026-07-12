@@ -95,6 +95,23 @@ class DailyReadiness(Base):
     computed_at = Column(DateTime(timezone=True), nullable=True)
 
 
+class StravaToken(Base):
+    """Single-row table holding the current Strava OAuth tokens.
+
+    Auth plumbing, not one of the six data buckets.
+    """
+
+    __tablename__ = "strava_tokens"
+
+    id = Column(Integer, primary_key=True)
+    access_token = Column(String, nullable=False)
+    refresh_token = Column(String, nullable=False)
+    expires_at = Column(BigInteger, nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class PlannedWorkout(Base):
     """Bucket 6: future date + target TSS; editable/provisional."""
 

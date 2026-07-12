@@ -13,6 +13,17 @@ STATIC_DIR = Path(__file__).parent / "static"
 app = FastAPI(title="Cycling Performance API")
 
 
+def public_base_url(request: Request) -> str:
+    # Railway terminates TLS at the edge and forwards plain HTTP internally,
+    # so request.base_url reports "http://" even though the public URL is
+    # always "https://". Force it, since some callers (e.g. Strava's
+    # webhook validator) don't follow redirects.
+    base = str(request.base_url)
+    if base.startswith("http://"):
+        base = "https://" + base[len("http://") :]
+    return base
+
+
 @app.get("/health")
 def health():
     with engine.connect() as conn:
@@ -22,7 +33,7 @@ def health():
 
 @app.get("/strava/authorize")
 def strava_authorize(request: Request):
-    redirect_uri = str(request.base_url) + "strava/callback"
+    redirect_uri = public_base_url(request) + "strava/callback"
     return RedirectResponse(strava.build_authorize_url(redirect_uri))
 
 
@@ -91,7 +102,7 @@ async def strava_webhook_receive(request: Request, background_tasks: BackgroundT
 
 @app.get("/strava/webhook/subscribe")
 def strava_webhook_subscribe(request: Request):
-    callback_url = str(request.base_url) + "strava/webhook"
+    callback_url = public_base_url(request) + "strava/webhook"
     return strava_webhook.create_subscription(callback_url)
 
 

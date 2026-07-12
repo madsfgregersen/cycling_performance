@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cycling performance</title>
+<style>
+:root{
+--paper:#FBFBFA;--card:#FFFFFF;--ink:#1B1B18;--muted:#6E6E68;--faint:#9A9A93;
+--line:#E7E4DD;--line2:#D8D5CC;
+--amber:#B0700F;--amber-bg:#FAEFD8;--green:#3B6D11;--green-bg:#EAF3DE;--red:#A32D2D;--red-bg:#FBEAEA;
+--teal:#1D9E75;--coral:#D85A30;--form:#E24B4A;
+--deep:#0F6E56;--core:#5DCAA5;--rem:#7F77DD;
+--sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+--mono:'SFMono-Regular',ui-monospace,'JetBrains Mono',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:900px;margin:0 auto;padding:0 20px 80px}
+svg{display:block;width:100%}
+.lbl{font-size:12px;color:var(--muted)}
+.cap{font-size:11px;color:var(--faint)}
+.big{font-family:var(--mono);font-weight:500;letter-spacing:-.01em}
+.card{background:var(--card);border:.5px solid var(--line);border-radius:14px;padding:16px 18px}
+.dot{width:11px;height:11px;border-radius:50%;background:var(--amber);display:inline-block}
+
+header.top{background:rgba(251,251,250,.92);backdrop-filter:blur(8px);border-bottom:.5px solid var(--line);padding:14px 20px;margin-bottom:18px}
+header.top .inner{max-width:900px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.brand{font-weight:600;letter-spacing:-.01em}
+
+.hero{display:flex;gap:26px;align-items:center;flex-wrap:wrap}
+.verd{display:flex;flex-direction:column;gap:5px;min-width:120px}
+.verd .v{display:flex;align-items:center;gap:8px;font-weight:600;font-size:17px}
+.score{font-family:var(--mono);font-size:44px;font-weight:600;line-height:1;letter-spacing:-.03em}
+.score small{font-size:16px;color:var(--faint);font-weight:400}
+.contrib{flex:1;min-width:280px;display:flex;gap:28px}
+.contrib .stat{display:flex;flex-direction:column;gap:2px}
+.contrib .stat .n{font-size:21px}
+
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px}
+.tilehd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px}
+
+#tt{position:fixed;pointer-events:none;background:#1B1B18;color:#fff;font-size:11.5px;line-height:1.45;padding:7px 9px;border-radius:8px;opacity:0;transition:opacity .08s;z-index:50;white-space:nowrap}
+#tt .k{color:#B4B2A9} #tt b{font-family:var(--mono);font-weight:500}
+
+.empty{color:var(--faint);font-size:13px;padding:20px 0;text-align:center}
+
+@media(max-width:720px){ .grid3{grid-template-columns:1fr} .hero{gap:16px} }
+</style>
+</head>
+<body>
+<header class="top"><div class="inner">
+<div class="brand">Cycling performance</div>
+</div></header>
+<div class="wrap">
+
+  <div class="card">
+    <div class="hero">
+      <div class="verd">
+        <div class="v"><span class="dot" id="verdict-dot"></span><span id="verdict-label">&mdash;</span></div>
+        <div class="score" id="tsb-value">&mdash;<small> TSB</small></div>
+      </div>
+      <div class="contrib">
+        <div class="stat"><span class="lbl">Fitness (CTL)</span><span class="big n" id="ctl-value">&mdash;</span></div>
+        <div class="stat"><span class="lbl">Fatigue (ATL)</span><span class="big n" id="atl-value">&mdash;</span></div>
+        <div class="stat"><span class="lbl">As of</span><span class="big n" id="latest-date">&mdash;</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <div class="tilehd" style="margin-bottom:8px">
+      <span class="lbl">Training load &mdash; fitness, fatigue, form (last 60 days)</span>
+    </div>
+    <svg id="load" viewBox="0 0 640 220" aria-label="Fitness, fatigue and form over the last 60 days"></svg>
+    <div id="load-empty" class="empty" style="display:none">No readiness history yet &mdash; run a backfill and recompute first.</div>
+    <div style="display:flex;gap:18px;font-size:12px;color:var(--muted);margin-top:4px;flex-wrap:wrap">
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:2.5px;background:var(--teal);display:inline-block"></span>Fitness (CTL)</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:2.5px;background:var(--coral);display:inline-block"></span>Fatigue (ATL)</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:2.5px;background:var(--form);display:inline-block"></span>Form (TSB)</span>
+    </div>
+  </div>
+
+  <div class="grid3">
+    <div class="card">
+      <div class="tilehd"><span class="lbl">HRV overnight</span><span class="big" id="hrv-latest" style="font-size:21px">&mdash;</span></div>
+      <svg id="hrv" viewBox="0 0 300 118" aria-label="Overnight HRV over the last 14 nights"></svg>
+      <div id="hrv-empty" class="empty" style="display:none">No HRV data yet</div>
+    </div>
+    <div class="card">
+      <div class="tilehd"><span class="lbl">Resting HR</span><span class="big" id="rhr-latest" style="font-size:21px">&mdash;</span></div>
+      <svg id="rhr" viewBox="0 0 300 118" aria-label="Resting heart rate over the last 14 nights"></svg>
+      <div id="rhr-empty" class="empty" style="display:none">No resting HR data yet</div>
+    </div>
+    <div class="card">
+      <div class="tilehd"><span class="lbl">Sleep</span><span class="big" id="sleep-latest" style="font-size:21px">&mdash;</span></div>
+      <svg id="sleep" viewBox="0 0 300 118" aria-label="Nightly sleep stages over the last 14 nights"></svg>
+      <div id="sleep-empty" class="empty" style="display:none">No sleep data yet</div>
+      <div class="cap"><span style="color:var(--deep)">&#9632;</span> deep <span style="color:var(--core)">&#9632;</span> core <span style="color:var(--rem)">&#9632;</span> rem</div>
+    </div>
+  </div>
+
+</div>
+<div id="tt"></div>
+<script>
+var NS='http://www.w3.org/2000/svg';
+function E(t,a){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);return e;}
+function vb(s){var b=s.getAttribute('viewBox').split(' ');return{w:+b[2],h:+b[3]};}
+function txt(x,y,s,fill,size,anchor,mono){var e=E('text',{x:x,y:y,fill:fill,'font-size':size||10,'text-anchor':anchor||'start'});if(mono)e.setAttribute('font-family','var(--mono)');e.textContent=s;return e;}
+
+var tt=document.getElementById('tt');
+function tipShow(evt,html){tt.innerHTML=html;tt.style.opacity=1;var r=tt.getBoundingClientRect();
+  var x=evt.clientX+12,y=evt.clientY-r.height-8;if(x+r.width>innerWidth-8)x=evt.clientX-r.width-12;if(y<8)y=evt.clientY+14;
+  tt.style.left=x+'px';tt.style.top=y+'px';}
+function tipHide(){tt.style.opacity=0;}
+
+function verdictColor(v){return v==='green'?'var(--green)':v==='red'?'var(--red)':'var(--amber)';}
+
+/* generic line tile: y ticks, line, latest point label, hover */
+function lineTile(id, points, color, unit, fmt){
+  var s=document.getElementById(id); if(!s) return;
+  var data=points.filter(function(p){return p.value!==null && p.value!==undefined;});
+  if(data.length===0){ document.getElementById(id+'-empty').style.display='block'; return; }
+  var d=vb(s);
+  var padL=30,padR=20,padT=14,padB=20;
+  var values=data.map(function(p){return p.value;});
+  var min=Math.min.apply(null,values), max=Math.max.apply(null,values);
+  if(min===max){min-=1;max+=1;}
+  var pad=(max-min)*0.15; min-=pad; max+=pad;
+  function X(i){return data.length===1?(d.w/2):padL+(d.w-padL-padR)*i/(data.length-1);}
+  function Y(v){return padT+(d.h-padT-padB)*(max-v)/(max-min);}
+  [min,(min+max)/2,max].forEach(function(tk){var y=Y(tk);s.appendChild(E('line',{x1:padL,y1:y,x2:d.w-padR,y2:y,stroke:'var(--line)','stroke-width':.5}));
+    s.appendChild(txt(padL-6,y+3,fmt(tk),'var(--faint)',10,'end',true));});
+  var pts=data.map(function(p,i){return X(i).toFixed(1)+','+Y(p.value).toFixed(1);}).join(' ');
+  s.appendChild(E('polyline',{points:pts,fill:'none',stroke:color,'stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round'}));
+  var last=data[data.length-1];
+  s.appendChild(E('circle',{cx:X(data.length-1),cy:Y(last.value),r:3.5,fill:color}));
+  var hw=data.length>1?(d.w-padL-padR)/(data.length-1):d.w-padL-padR;
+  data.forEach(function(p,i){
+    var r=E('rect',{x:X(i)-hw/2,y:padT,width:hw,height:d.h-padT-padB,fill:'transparent'});
+    r.style.cursor='crosshair';
+    r.addEventListener('mousemove',function(ev){tipShow(ev,'<span class="k">'+p.date+'</span><br><b>'+fmt(p.value)+'</b> '+unit);});
+    r.addEventListener('mouseleave',tipHide);
+    s.appendChild(r);
+  });
+  return last.value;
+}
+
+function sleepTile(id, nights){
+  var s=document.getElementById(id); if(!s) return;
+  var data=nights.filter(function(n){return n.total!==null && n.total!==undefined;});
+  if(data.length===0){ document.getElementById(id+'-empty').style.display='block'; return; }
+  var d=vb(s);
+  var padL=26,padR=10,padT=14,padB=18,base=d.h-padB;
+  var maxH=Math.max(8.8, Math.max.apply(null,data.map(function(n){return n.total;}))+0.5);
+  function Y(h){return base-(base-padT)*(h/maxH);}
+  [2,4,6,8].forEach(function(h){if(h>maxH)return;var y=Y(h);s.appendChild(E('line',{x1:padL,y1:y,x2:d.w-padR,y2:y,stroke:'var(--line)','stroke-width':.5}));
+    s.appendChild(txt(padL-6,y+3,h+'h','var(--faint)',10,'end',true));});
+  var n=data.length,gap=6,bw=(d.w-padL-padR-gap*(n-1))/n,x=padL;
+  data.forEach(function(night,i){
+    var deep=night.deep||0, rem=night.rem||0, core=night.core||(night.total-deep-rem);
+    var yTop=Y(night.total);
+    s.appendChild(E('rect',{x:x,y:yTop,width:bw,height:Y(0)-Y(rem),fill:'#7F77DD',rx:2}));
+    s.appendChild(E('rect',{x:x,y:yTop+(Y(0)-Y(rem)),width:bw,height:Y(0)-Y(core),fill:'#5DCAA5'}));
+    s.appendChild(E('rect',{x:x,y:yTop+(Y(0)-Y(rem))+(Y(0)-Y(core)),width:bw,height:Y(0)-Y(deep),fill:'#0F6E56'}));
+    var hh=Math.floor(night.total),mm=Math.round((night.total-hh)*60);var lab=hh+':'+(mm<10?'0':'')+mm;
+    var hit=E('rect',{x:x,y:padT,width:bw,height:base-padT,fill:'transparent'});hit.style.cursor='crosshair';
+    hit.addEventListener('mousemove',function(ev){tipShow(ev,'<span class="k">'+night.date+'</span><br><b>'+lab+'</b> total<br><span class="k">deep '+deep.toFixed(1)+'h &middot; core '+core.toFixed(1)+'h &middot; rem '+rem.toFixed(1)+'h</span>');});
+    hit.addEventListener('mouseleave',tipHide);s.appendChild(hit);
+    x+=bw+gap;
+  });
+  return data[data.length-1].total;
+}
+
+function loadChart(history){
+  var s=document.getElementById('load'); if(!s) return;
+  if(history.length===0){ document.getElementById('load-empty').style.display='block'; return; }
+  var d=vb(s);
+  var padL=32,padR=16,padT=16,mainB=d.h-52,fTop=d.h-46,fBase=d.h-16;
+  var ctl=history.map(function(r){return r.ctl||0;});
+  var atl=history.map(function(r){return r.atl||0;});
+  var tsb=history.map(function(r){return r.tsb||0;});
+  var vmin=Math.min.apply(null,ctl.concat(atl))-5, vmax=Math.max.apply(null,ctl.concat(atl))+5;
+  var tmin=Math.min.apply(null,tsb), tmax=Math.max.apply(null,tsb);
+  var tspan=Math.max(Math.abs(tmin),Math.abs(tmax),10);
+  function X(i){return padL+(d.w-padL-padR)*i/(history.length-1||1);}
+  function Y(v){return padT+(mainB-padT)*(vmax-v)/(vmax-vmin);}
+  function Yf(v){return fTop+(fBase-fTop)*(tspan-v)/(2*tspan);}
+  [vmin,Math.round((vmin+vmax)/2),vmax].forEach(function(tk){var y=Y(tk);s.appendChild(E('line',{x1:padL,y1:y,x2:d.w-padR,y2:y,stroke:'var(--line)','stroke-width':.5}));
+    s.appendChild(txt(padL-6,y+3,Math.round(tk),'var(--faint)',10,'end',true));});
+  function line(arr,Yfn,color){
+    var p=arr.map(function(v,i){return X(i).toFixed(1)+','+Yfn(v).toFixed(1);}).join(' ');
+    s.appendChild(E('polyline',{points:p,fill:'none',stroke:color,'stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round'}));
+  }
+  s.appendChild(E('line',{x1:padL,y1:Yf(0),x2:d.w-padR,y2:Yf(0),stroke:'var(--line)','stroke-width':.5}));
+  line(ctl,Y,'#1D9E75'); line(atl,Y,'#D85A30'); line(tsb,Yf,'#E24B4A');
+  var last=history[history.length-1];
+  s.appendChild(E('circle',{cx:X(history.length-1),cy:Y(last.ctl||0),r:3.5,fill:'#1D9E75'}));
+  s.appendChild(E('circle',{cx:X(history.length-1),cy:Y(last.atl||0),r:3.5,fill:'#D85A30'}));
+  var hw=(d.w-padL-padR)/(history.length-1||1);
+  history.forEach(function(row,i){
+    var r=E('rect',{x:X(i)-hw/2,y:padT,width:hw,height:d.h-padT-14,fill:'transparent'});
+    r.style.cursor='crosshair';
+    r.addEventListener('mousemove',function(ev){tipShow(ev,'<span class="k">'+row.date+'</span><br>CTL <b>'+(row.ctl||0).toFixed(1)+'</b> &middot; ATL <b>'+(row.atl||0).toFixed(1)+'</b> &middot; TSB <b>'+(row.tsb||0).toFixed(1)+'</b>');});
+    r.addEventListener('mouseleave',tipHide);
+    s.appendChild(r);
+  });
+}
+
+fetch('/dashboard/data').then(function(r){return r.json();}).then(function(data){
+  var latest=data.latest;
+  if(latest){
+    document.getElementById('verdict-label').textContent=latest.verdict?(latest.verdict.charAt(0).toUpperCase()+latest.verdict.slice(1)):'—';
+    document.getElementById('verdict-dot').style.background=verdictColor(latest.verdict);
+    document.getElementById('tsb-value').innerHTML=(latest.tsb!==null?latest.tsb.toFixed(1):'—')+'<small> TSB</small>';
+    document.getElementById('ctl-value').textContent=latest.ctl!==null?latest.ctl.toFixed(1):'—';
+    document.getElementById('atl-value').textContent=latest.atl!==null?latest.atl.toFixed(1):'—';
+    document.getElementById('latest-date').textContent=latest.date;
+  }
+  loadChart(data.load_history);
+
+  var hrvLast=lineTile('hrv', data.recovery.hrv, '#1D9E75', 'ms', function(v){return v.toFixed(0);});
+  document.getElementById('hrv-latest').textContent=hrvLast!==undefined?hrvLast.toFixed(0):'—';
+
+  var rhrLast=lineTile('rhr', data.recovery.resting_hr, '#D85A30', 'bpm', function(v){return v.toFixed(0);});
+  document.getElementById('rhr-latest').textContent=rhrLast!==undefined?rhrLast.toFixed(0):'—';
+
+  var sleepLast=sleepTile('sleep', data.recovery.sleep);
+  if(sleepLast!==undefined){
+    var hh=Math.floor(sleepLast),mm=Math.round((sleepLast-hh)*60);
+    document.getElementById('sleep-latest').textContent=hh+':'+(mm<10?'0':'')+mm;
+  }
+});
+</script>
+</body>
+</html>

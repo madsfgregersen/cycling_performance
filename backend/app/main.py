@@ -1,10 +1,14 @@
+from pathlib import Path
+
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from . import backfill, health_ingest, readiness, strava
+from . import backfill, dashboard, health_ingest, readiness, strava
 from .database import engine, get_db
+
+STATIC_DIR = Path(__file__).parent / "static"
 
 app = FastAPI(title="Cycling Performance API")
 
@@ -52,3 +56,13 @@ async def ingest_health_data(
         raise HTTPException(status_code=401, detail="invalid token")
     payload = await request.json()
     return health_ingest.ingest_payload(db, payload)
+
+
+@app.get("/dashboard")
+def dashboard_page():
+    return FileResponse(STATIC_DIR / "dashboard.html")
+
+
+@app.get("/dashboard/data")
+def dashboard_data(db: Session = Depends(get_db)):
+    return dashboard.get_dashboard_data(db)

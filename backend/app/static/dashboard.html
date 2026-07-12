@@ -205,6 +205,7 @@ function verdictColor(v){return v==='green'?'var(--green)':v==='red'?'var(--red)
 /* generic line tile: y ticks, line, latest point label, hover */
 function lineTile(id, points, color, unit, fmt){
   var s=document.getElementById(id); if(!s) return;
+  s.innerHTML='';
   var data=points.filter(function(p){return p.value!==null && p.value!==undefined;});
   if(data.length===0){ document.getElementById(id+'-empty').style.display='block'; return; }
   var d=vb(s);
@@ -234,6 +235,7 @@ function lineTile(id, points, color, unit, fmt){
 
 function sleepTile(id, nights){
   var s=document.getElementById(id); if(!s) return;
+  s.innerHTML='';
   var data=nights.filter(function(n){return n.total!==null && n.total!==undefined;});
   if(data.length===0){ document.getElementById(id+'-empty').style.display='block'; return; }
   var d=vb(s);
@@ -260,7 +262,9 @@ function sleepTile(id, nights){
 
 function loadChart(elId, history, projection){
   var s=document.getElementById(elId); if(!s) return;
+  s.innerHTML='';
   var emptyEl=document.getElementById(elId+'-empty');
+  if(emptyEl) emptyEl.style.display='none';
   if(history.length===0){ if(emptyEl) emptyEl.style.display='block'; return; }
   projection=projection||[];
   var all=history.concat(projection);

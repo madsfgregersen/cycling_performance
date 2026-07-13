@@ -907,7 +907,10 @@ function askCoachFromPlan(){ sendToCoach('plan-ask-input', 'plan-thread-rows'); 
 function resolveProposal(id, action){
   threadRequestInFlight=true;
   fetch('/plan/proposals/'+id+'/'+action, {method:'POST'})
-    .then(function(){ threadRequestInFlight=false; loadThread(); loadPlanOverview(); })
+    // loadPlan() re-fetches /planned-workouts so a confirmed change (a
+    // compiled or adjusted workout) shows on the calendar without a manual
+    // reload -- loadThread/loadPlanOverview alone don't touch the calendar.
+    .then(function(){ threadRequestInFlight=false; loadThread(); loadPlanOverview(); loadPlan(); })
     .catch(function(){ threadRequestInFlight=false; });
 }
 

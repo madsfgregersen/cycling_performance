@@ -174,6 +174,7 @@ A **4th reasoning branch** (`coach_plan_compile.py`), classified as intent `comp
 - Compilation reuses the disruption flow's write path: proposals are tagged `kind="compile"` (a one-off day/week) or `kind="compile_block"` (an auto-advancing block fill) and applied by `coach_plan_adjust.apply_changes`. No new table or migration — `kind` was already a free-text column.
 - **Auto-advance:** confirming a `compile_block` week triggers `propose_next_in_block`, which proposes the next un-filled week of the *same* phase as its own pending proposal. Rejecting a week stops the chain. The chain is bounded to the block (when the phase is complete it stops); sweeping the whole plan to the event is 12c's separate, still-deferred scope.
 - The taper/event hard boundary is enforced at both propose and apply time, same as disruption.
+- **Title/notes split.** `planned_workouts` has a `title` column (short calendar label, e.g. "Z2 long ride", "Hill reps") separate from `notes` (the full session detail). The coach sets both when it creates a workout; the calendar card shows the title (falling back to the zone label), and clicking a workout opens the full notes in a textarea. Disruption updates leave `title` null on a pure move so a shuffle doesn't wipe the label. A one-off `POST /planned-workouts/backfill-titles` (`coach_plan_compile.backfill_titles`, idempotent) gave titles to workouts created before the split.
 
 ### The conversation model — an important extension beyond the original brief
 

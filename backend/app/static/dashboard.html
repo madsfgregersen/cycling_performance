@@ -61,7 +61,8 @@ header.top .inner{max-width:900px;margin:0 auto;display:flex;align-items:center;
 
 .btn{font:inherit;font-size:12px;padding:6px 14px;border:.5px solid var(--line2);background:#fff;border-radius:8px;cursor:pointer;color:var(--ink)}
 .btn:hover{border-color:var(--faint)}
-input[type=date],input[type=number],input[type=text],select{font:inherit;font-size:13px;padding:6px 9px;border:.5px solid var(--line2);border-radius:8px;background:#fff}
+input[type=date],input[type=number],input[type=text],select,textarea{font:inherit;font-size:13px;padding:6px 9px;border:.5px solid var(--line2);border-radius:8px;background:#fff}
+textarea{resize:vertical;line-height:1.45}
 
 .wkhd{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px}
 .wknav{display:flex;align-items:center;gap:10px}
@@ -92,7 +93,7 @@ input[type=date],input[type=number],input[type=text],select{font:inherit;font-si
 .modal .sub{font-size:12px;color:var(--faint);margin-bottom:14px}
 .field{margin-bottom:12px}
 .field label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:4px}
-.field input,.field select{width:100%}
+.field input,.field select,.field textarea{width:100%;box-sizing:border-box}
 .modal .foot{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 .primary{background:var(--violet);color:#fff;border:none;border-radius:8px;padding:8px 16px;font:inherit;font-size:13px;cursor:pointer}
 
@@ -291,6 +292,10 @@ input[type=date],input[type=number],input[type=text],select{font:inherit;font-si
     <h3 id="wo-modal-title">Add workout</h3>
     <div class="sub" id="wo-modal-date"></div>
     <div class="field">
+      <label>Title</label>
+      <input type="text" id="wo-title" placeholder="e.g. Z2 long ride">
+    </div>
+    <div class="field">
       <label>Zone</label>
       <select id="wo-zone">
         <option value="z1">Z1 &middot; Recovery</option>
@@ -306,7 +311,7 @@ input[type=date],input[type=number],input[type=text],select{font:inherit;font-si
     </div>
     <div class="field">
       <label>Notes</label>
-      <input type="text" id="wo-notes">
+      <textarea id="wo-notes" rows="6"></textarea>
     </div>
     <div class="foot">
       <button class="btn" id="wo-delete-btn" onclick="deleteWorkoutModal()" style="display:none;margin-right:auto;color:var(--red);border-color:var(--red)">Delete</button>
@@ -612,7 +617,7 @@ function renderWeek(){
       total+=w.target_tss||0; count++;
       var wo=document.createElement('div');
       wo.className='wo '+(w.zone||'z2');
-      wo.innerHTML='<span class="t">'+escapeHtml(w.notes||zoneLabel(w.zone))+'</span>'
+      wo.innerHTML='<span class="t">'+escapeHtml(w.title||zoneLabel(w.zone))+'</span>'
         +'<span class="m">'+(w.target_tss!=null?Math.round(w.target_tss)+' TSS':'')+'</span>';
       wo.onclick=(function(w){ return function(){ openWorkoutModal(w.date, w); }; })(w);
       cell.appendChild(wo);
@@ -641,6 +646,7 @@ function openWorkoutModal(dateStr, workout){
   editingId=workout?workout.id:null;
   document.getElementById('wo-modal-title').textContent=workout?'Edit workout':'Add workout';
   document.getElementById('wo-modal-date').textContent=dateStr;
+  document.getElementById('wo-title').value=workout?(workout.title||''):'';
   document.getElementById('wo-zone').value=workout?(workout.zone||'z2'):'z2';
   document.getElementById('wo-tss').value=workout?(workout.target_tss!=null?workout.target_tss:''):60;
   document.getElementById('wo-notes').value=workout?(workout.notes||''):'';
@@ -656,6 +662,7 @@ function saveWorkoutModal(){
     date: modalDate,
     zone: document.getElementById('wo-zone').value,
     target_tss: tssVal?parseFloat(tssVal):null,
+    title: document.getElementById('wo-title').value||null,
     notes: document.getElementById('wo-notes').value||null
   };
   var req = editingId

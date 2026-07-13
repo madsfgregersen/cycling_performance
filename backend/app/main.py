@@ -19,6 +19,7 @@ from . import (
     coach_missed_workout,
     coach_morning,
     coach_plan_adjust,
+    coach_plan_compile,
     coach_ride,
     coach_weekly_summary,
     dashboard,
@@ -42,6 +43,7 @@ class PlannedWorkoutIn(BaseModel):
     date: date_type
     target_tss: Optional[float] = None
     zone: Optional[str] = None
+    title: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -200,7 +202,7 @@ def list_planned_workouts(db: Session = Depends(get_db)):
 @app.post("/planned-workouts")
 def create_planned_workout(workout: PlannedWorkoutIn, db: Session = Depends(get_db)):
     return planned_workouts.create_workout(
-        db, workout.date, workout.target_tss, workout.zone, workout.notes
+        db, workout.date, workout.target_tss, workout.zone, workout.notes, workout.title
     )
 
 
@@ -209,7 +211,7 @@ def update_planned_workout(
     workout_id: int, workout: PlannedWorkoutIn, db: Session = Depends(get_db)
 ):
     result = planned_workouts.update_workout(
-        db, workout_id, workout.date, workout.target_tss, workout.zone, workout.notes
+        db, workout_id, workout.date, workout.target_tss, workout.zone, workout.notes, workout.title
     )
     if result is None:
         raise HTTPException(status_code=404, detail="not found")
@@ -219,6 +221,14 @@ def update_planned_workout(
 @app.delete("/planned-workouts/{workout_id}")
 def delete_planned_workout(workout_id: int, db: Session = Depends(get_db)):
     return planned_workouts.delete_workout(db, workout_id)
+
+
+@app.post("/planned-workouts/backfill-titles")
+def backfill_workout_titles(db: Session = Depends(get_db)):
+    """One-off: give short titles to workouts created before the title/notes
+    split (detail in notes, no title). Idempotent -- safe to call more than
+    once; only fills rows still missing a title."""
+    return coach_plan_compile.backfill_titles(db)
 
 
 @app.get("/planned-workouts/projection")

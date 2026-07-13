@@ -9,6 +9,7 @@ def _serialize(row: PlannedWorkout) -> dict:
         "date": row.date.isoformat(),
         "target_tss": row.target_tss,
         "zone": row.zone,
+        "title": row.title,
         "notes": row.notes,
     }
 
@@ -18,9 +19,9 @@ def list_workouts(db: Session) -> list:
     return [_serialize(row) for row in rows]
 
 
-def create_workout(db: Session, workout_date, target_tss, zone, notes) -> dict:
+def create_workout(db: Session, workout_date, target_tss, zone, notes, title=None) -> dict:
     workout = PlannedWorkout(
-        date=workout_date, target_tss=target_tss, zone=zone, notes=notes
+        date=workout_date, target_tss=target_tss, zone=zone, title=title, notes=notes
     )
     db.add(workout)
     db.commit()
@@ -28,13 +29,14 @@ def create_workout(db: Session, workout_date, target_tss, zone, notes) -> dict:
     return _serialize(workout)
 
 
-def update_workout(db: Session, workout_id: int, workout_date, target_tss, zone, notes):
+def update_workout(db: Session, workout_id: int, workout_date, target_tss, zone, notes, title=None):
     workout = db.query(PlannedWorkout).filter(PlannedWorkout.id == workout_id).first()
     if workout is None:
         return None
     workout.date = workout_date
     workout.target_tss = target_tss
     workout.zone = zone
+    workout.title = title
     workout.notes = notes
     db.commit()
     db.refresh(workout)

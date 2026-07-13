@@ -155,6 +155,9 @@ class PlannedWorkout(Base):
     date = Column(Date, nullable=False)
     target_tss = Column(Float, nullable=True)
     zone = Column(String, nullable=True)
+    # Short card label (e.g. "Z2 long ride", "Hill reps"); the full session
+    # description lives in notes.
+    title = Column(String, nullable=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(

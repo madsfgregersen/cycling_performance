@@ -98,7 +98,7 @@ def build_compile_context(db: Session, today):
         # coach can pick the first un-filled week of a block on its own.
         "blocks": [{**b, "planned_workout_count": counts.get(b["week"], 0)} for b in blocks],
         "planned_workouts": [
-            {"id": w.id, "date": w.date.isoformat(), "target_tss": w.target_tss, "zone": w.zone, "notes": w.notes}
+            {"id": w.id, "date": w.date.isoformat(), "target_tss": w.target_tss, "zone": w.zone, "title": w.title, "notes": w.notes}
             for w in all_planned
         ],
         "standing_constraints": [c["text"] for c in plan_constraints.list_constraints(db)],
@@ -143,7 +143,10 @@ def _compile_core(db: Session, message_text: str):
         "that is non-negotiable; the athlete approves one week at a time. Compile "
         "from the block's focus/detail, honor the standing constraints (especially "
         "rides-per-week and rest days -- do not over-fill a week), and fit target_tss "
-        "and zone to recent load. Use 'create' for new days; use 'update' only for a "
+        "and zone to recent load. Give every session a SHORT title (a few words, e.g. "
+        "'Z2 long ride', 'Threshold 2x20', 'Hill reps', 'Recovery spin') and put the "
+        "full workout detail in notes -- the title is the calendar label, not the "
+        "description. Use 'create' for new days; use 'update' only for a "
         "day that already has a workout, with its id from planned_workouts. Every date "
         "must be strictly before guardrail_hard_boundary (never on or after it). If "
         "nothing should be added (e.g. the week is already full, or it's past the "
@@ -239,3 +242,59 @@ def propose_next_in_block(db: Session, prev_changes: list):
     if core is None or not core["changes"]:
         return None
     return {"summary": core["summary"], "changes": core["changes"]}
+
+
+TITLE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "title": {
+            "type": "string",
+            "description": (
+                "A short calendar label of a few words for this session, drawn from its detail -- "
+                "e.g. 'Z2 long ride', 'Threshold 2x20', 'Hill reps', 'Recovery spin'."
+            ),
+        },
+    },
+    "required": ["title"],
+    "additionalProperties": False,
+}
+
+
+def _title_from_notes(notes: str, zone) -> str:
+    """Derive a short card title from an existing workout's detail. Returns ''
+    if the coach isn't configured (caller then leaves the row's title unset)."""
+    result = ai_coach.ask_claude_structured(
+        f'A planned cycling workout (zone {zone or "n/a"}) has this detail:\n\n"{notes}"\n\n'
+        "Give it a short calendar label.",
+        COACH_SYSTEM_PROMPT,
+        TITLE_SCHEMA,
+        max_tokens=64,
+    )
+    return (result.get("title") or "").strip()
+
+
+def backfill_titles(db: Session) -> dict:
+    """One-off: give a short title to existing planned workouts that have
+    detail in notes but no title yet (created before the title/notes split).
+    Idempotent -- only touches rows with a null/blank title and non-blank
+    notes, so re-running is a no-op once every row has a title."""
+    rows = (
+        db.query(PlannedWorkout)
+        .filter((PlannedWorkout.title.is_(None)) | (PlannedWorkout.title == ""))
+        .order_by(PlannedWorkout.date)
+        .all()
+    )
+    updated = 0
+    skipped = 0
+    for row in rows:
+        if not (row.notes or "").strip():
+            skipped += 1
+            continue
+        title = _title_from_notes(row.notes, row.zone)
+        if not title:
+            skipped += 1
+            continue
+        row.title = title
+        updated += 1
+    db.commit()
+    return {"updated": updated, "skipped": skipped, "candidates": len(rows)}

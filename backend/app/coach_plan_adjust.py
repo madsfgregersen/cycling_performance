@@ -85,9 +85,18 @@ PROPOSAL_SCHEMA = {
                     "date": {"type": "string", "description": "YYYY-MM-DD"},
                     "target_tss": {"type": ["number", "null"]},
                     "zone": {"type": ["string", "null"], "description": "z1-z5 or null"},
+                    "title": {
+                        "type": ["string", "null"],
+                        "description": (
+                            "Short card label, a few words -- e.g. 'Z2 long ride', 'Threshold 2x20', "
+                            "'Hill reps', 'Recovery spin'. The full session detail goes in notes, not "
+                            "here. On an update that doesn't change the session, leave null to keep the "
+                            "existing title."
+                        ),
+                    },
                     "notes": {"type": ["string", "null"]},
                 },
-                "required": ["action", "workout_id", "date", "target_tss", "zone", "notes"],
+                "required": ["action", "workout_id", "date", "target_tss", "zone", "title", "notes"],
                 "additionalProperties": False,
             },
         },
@@ -177,7 +186,7 @@ def build_disruption_context(db: Session, today: date):
             "end": current_week["end"],
         },
         "editable_planned_workouts": [
-            {"id": w.id, "date": w.date.isoformat(), "target_tss": w.target_tss, "zone": w.zone, "notes": w.notes}
+            {"id": w.id, "date": w.date.isoformat(), "target_tss": w.target_tss, "zone": w.zone, "title": w.title, "notes": w.notes}
             for w in planned
         ],
         "standing_constraints": [c["text"] for c in plan_constraints.list_constraints(db)],
@@ -212,8 +221,11 @@ def propose_adjustment(db: Session, message_text: str):
         + "\n\nPropose concrete changes to editable_planned_workouts to handle this "
         "disruption -- only using the workout ids given, only for dates strictly "
         "before guardrail_hard_boundary (never on or after it -- that line is "
-        "absolutely non-negotiable). If nothing needs to change, return an empty "
-        "changes list and explain why in summary."
+        "absolutely non-negotiable). When you create a session or change what it is, "
+        "give it a short title (a few words) and keep the full detail in notes; on a "
+        "pure move that doesn't change the session, leave title null to keep it. If "
+        "nothing needs to change, return an empty changes list and explain why in "
+        "summary."
     )
     result = ai_coach.ask_claude_structured(prompt, COACH_SYSTEM_PROMPT, PROPOSAL_SCHEMA)
     if not result:
@@ -262,6 +274,10 @@ def apply_changes(db: Session, changes: list) -> int:
                 row.target_tss = change.get("target_tss")
                 row.zone = change.get("zone")
                 row.notes = change.get("notes")
+                # Null title on an update means "keep the existing one" (e.g. a
+                # pure day move), so we don't wipe a good label on a shuffle.
+                if change.get("title") is not None:
+                    row.title = change.get("title")
             applied += 1
         elif action == "create":
             db.add(
@@ -269,6 +285,7 @@ def apply_changes(db: Session, changes: list) -> int:
                     date=change_date,
                     target_tss=change.get("target_tss"),
                     zone=change.get("zone"),
+                    title=change.get("title"),
                     notes=change.get("notes"),
                 )
             )

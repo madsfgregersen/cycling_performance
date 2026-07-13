@@ -144,3 +144,45 @@ Slice 1 requires an LLM API. Default: the Anthropic API, which needs a new `ANTH
 - **Story 12 authorship (unresolved).** Does "the coach compiles the brief into workouts, the athlete approves" satisfy *you build, the coach advises* — or must the coach stay strictly suggest-only, with the athlete placing every workout? Decide before building the block scope of story 12. Does not affect slices 1–4.
 - **Readiness formula.** The formula the coach explains is a separate, still-open design decision (not a coach task). The coach depends on its output shape (verdict + driver breakdown) — coordinate the field names so §5.1 and the formula agree.
 - **Voice tuning.** The §6 prompt is a draft; expect to refine length and tone against real slice-1 output before it hardens into the reused-everywhere version.
+
+---
+
+## 9. Build status (updated 2026-07-14)
+
+All slices shipped and live except stories 10 and 12. Read this section before touching coach code — it documents real design decisions made during the build, some of which extend beyond what this brief originally specified.
+
+**Shipped:**
+
+| Slice | Stories | What it is |
+|---|---|---|
+| 1 | 1, 2 | Morning verdict explanation + subjective check-in (freshness/stress) |
+| 2 | 3, 5, 9 | Post-ride debrief (EF + decoupling from ride streams), missed-workout nudge, weekly/block summary |
+| 3 | 4 | Ride feel / RPE ask, tied to the specific ride that prompted it |
+| 4 | 6, 8 | Disruption adjustment (propose-confirm-write) + constraint drift alert |
+| — | 7 | Plan structure co-design (the 7-week block plan is now DB-backed and editable, not hardcoded) |
+| — | 11 | Q&A about the athlete's own data |
+
+**Not shipped:** story 10 ("am I on track for the event") and story 12 (plan compilation — see the open authorship question above, still unresolved as of this writing).
+
+### The conversation model — an important extension beyond the original brief
+
+Story 11 was originally scoped as a separate dashboard "Coach panel." During the build, this was reconsidered: rather than a fourth UI surface, Q&A became a **third reasoning branch** alongside disruption and plan_structure, behind the *same* intent classifier. There is one shared orchestrator, `coach_conversation.py`, that is the literal "one coach brain" this brief calls for in §1 — every surface really is a thin adapter onto it:
+
+- **Telegram** and the **dashboard** ("Talk to your coach," reachable both as a full page — the Plan brief sub-page — and as a compact panel docked on the Plan tab itself) are two windows onto the *same* conversation, not separate feeds. A message sent from either surface is visible from both.
+- Proactive pushes (morning verdict, ride debrief, missed-workout nudge, weekly summary, constraint drift) are *also* folded into this same unified thread now, interleaved chronologically with the reactive conversation — matching what Telegram already looks like natively.
+- Athlete-authored messages log under one event name (`checkin_received`, tagged by source) regardless of which surface or intent triggered them. Coach replies that are part of the conversation (as opposed to internal bookkeeping) log under `plan_thread_coach`. A generic `key=value | text` marker prefix lets a logged message carry metadata (which ride, which date, which proposal) without polluting the displayed text; a `proposal_id` marker gets its live status looked up and rendered as inline Confirm/Reject buttons directly on that message when still pending.
+- Telegram's Bot API cannot make a message appear as if the athlete sent it, so when the athlete writes from the dashboard, the bot echoes what they said into the Telegram chat before its own reply (`coach_conversation.echo_athlete_action`) — otherwise the Telegram side would show replies with no visible question.
+- The three reasoning tasks (`coach_plan_adjust.py` for disruption, `coach_plan_structure.py` for plan_structure, `coach_qa.py` for question) are independent context-builders sharing only the voice (`coach_voice.py`) and the classifier. Q&A is read-only — it never proposes or writes anything, unlike the other two. It's grounded in `coach_context.py`'s broader aggregator plus recent thread history (so follow-up questions work like a real conversation).
+- Both propose-confirm-write flows (disruption → `planned_workouts`, plan_structure → `plan_blocks`) share one `plan_adjustment_proposals` table, distinguished by a `kind` column. The taper/event-date guardrail is enforced in code twice — once when a change is proposed, again when it's confirmed — never left to the prompt alone.
+- The race goal itself (name/date/distance/elevation/hills) moved from hardcoded Python into a DB-backed `race_goal` table, editable from the brief page. Editing it does *not* reshape the block calendar — that stays a separate, deliberate co-design action.
+- `ai_coach.py`'s two Claude-calling functions fail safe (return `""`/`{}`) on any exception now, rather than raising — an earlier version could 500 the Telegram webhook on a transient API hiccup and go completely silent with no diagnostic trace.
+
+### Where to look
+
+- `coach_conversation.py` — the orchestrator; start here.
+- `coach_context.py` — the broad data aggregator Q&A reads from.
+- `coach_plan_adjust.py` — disruption reasoning + both intent classifiers (message intent, proposal-reply decision).
+- `coach_plan_structure.py`, `coach_qa.py` — the other two reasoning branches.
+- `plan_constraints.py`, `plan_blocks.py`, `race_goal.py` — the athlete-editable "brief" data (constraints list, block structure, goal facts).
+- `telegram.py` — transport only now; the proactive `send_*` functions plus the webhook handler, no reasoning of its own.
+- `backend/app/static/dashboard.html` — `view-brief` (full conversation + constraints + goal editor) and the compact panel embedded in `view-plan`.

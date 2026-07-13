@@ -29,8 +29,18 @@ repo.
 See the `docs/` folder:
 
 - `docs/architecture.md` — the four locked architecture decisions
-- `docs/build-plan.md` — build sequence and reasoning
+- `docs/build-plan.md` — build sequence and reasoning (Backend → Dashboard →
+  Telegram; this three-phase build is complete and live)
 - `docs/data-sources.md` — Strava and Apple Health integration details
 - `docs/health-data-notes.md` — key learnings on handling health data
 - `docs/backfill.md` — historical data backfill plan
 - `docs/race-context.md` — target race and rider background
+- `docs/geo-park-training-plan.md` — the original training plan text (now
+  seeded into the DB-backed `plan_blocks` table, not read from this file
+  directly by the app)
+- `docs/coach-brief.md` — **read this before touching any AI coach code.**
+  The full spec (character, principles, user stories, build order) plus a
+  "Build status" section (§9) documenting what's actually shipped, what
+  isn't, and real architecture decisions made during the build that extend
+  beyond the original spec — most importantly, the unified conversation
+  model behind both Telegram and the dashboard's "Talk to your coach"

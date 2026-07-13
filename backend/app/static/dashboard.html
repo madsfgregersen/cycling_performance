@@ -51,6 +51,7 @@ header.top .inner{max-width:900px;margin:0 auto;display:flex;align-items:center;
 .contrib .stat .n{font-size:21px}
 
 .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px}
+.grid2{display:grid;grid-template-columns:1.2fr 1fr;gap:12px}
 .tilehd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px}
 
 #tt{position:fixed;pointer-events:none;background:#1B1B18;color:#fff;font-size:11.5px;line-height:1.45;padding:7px 9px;border-radius:8px;opacity:0;transition:opacity .08s;z-index:50;white-space:nowrap}
@@ -148,7 +149,7 @@ input[type=date],input[type=number],input[type=text],select{font:inherit;font-si
 .ask-row{display:flex;gap:8px;margin-top:12px}
 .ask-row input{flex:1}
 
-@media(max-width:720px){ .grid3{grid-template-columns:1fr} .hero{gap:16px} .week{grid-template-columns:repeat(7,minmax(70px,1fr));overflow-x:auto} .struct-weeks{grid-template-columns:repeat(7,minmax(60px,1fr));overflow-x:auto} }
+@media(max-width:720px){ .grid3{grid-template-columns:1fr} .grid2{grid-template-columns:1fr} .hero{gap:16px} .week{grid-template-columns:repeat(7,minmax(70px,1fr));overflow-x:auto} .struct-weeks{grid-template-columns:repeat(7,minmax(60px,1fr));overflow-x:auto} }
 </style>
 </head>
 <body>
@@ -239,21 +240,34 @@ input[type=date],input[type=number],input[type=text],select{font:inherit;font-si
     <div id="struct-detail" class="struct-detail" style="display:none"></div>
   </div>
 
-  <div class="card" style="margin-top:12px">
-    <div class="wkhd">
-      <div class="wknav">
-        <button class="arw" onclick="navWeek(-1)">&#8249;</button>
-        <strong id="wk-label" style="font-size:14px"></strong>
-        <button class="arw" onclick="navWeek(1)">&#8250;</button>
+  <div class="grid2" style="margin-top:12px">
+    <div class="card">
+      <div class="wkhd">
+        <div class="wknav">
+          <button class="arw" onclick="navWeek(-1)">&#8249;</button>
+          <strong id="wk-label" style="font-size:14px"></strong>
+          <button class="arw" onclick="navWeek(1)">&#8250;</button>
+        </div>
+        <div class="wk-summary">
+          <span>Total <b id="wk-tss">0</b> TSS</span>
+          <span><b id="wk-count">0</b> workouts</span>
+          <span>ramp <b id="wk-ramp">&mdash;</b></span>
+        </div>
       </div>
-      <div class="wk-summary">
-        <span>Total <b id="wk-tss">0</b> TSS</span>
-        <span><b id="wk-count">0</b> workouts</span>
-        <span>ramp <b id="wk-ramp">&mdash;</b></span>
-      </div>
+      <div class="week" id="week-grid"></div>
+      <div class="cap" style="margin-top:8px">tap a workout to edit, or + to add &middot; <b style="color:var(--z1)">&#9632;</b> Z1 <b style="color:var(--z2)">&#9632;</b> Z2 <b style="color:var(--z3)">&#9632;</b> Z3 <b style="color:var(--z4)">&#9632;</b> Z4/Z5</div>
     </div>
-    <div class="week" id="week-grid"></div>
-    <div class="cap" style="margin-top:8px">tap a workout to edit, or + to add &middot; <b style="color:var(--z1)">&#9632;</b> Z1 <b style="color:var(--z2)">&#9632;</b> Z2 <b style="color:var(--z3)">&#9632;</b> Z3 <b style="color:var(--z4)">&#9632;</b> Z4/Z5</div>
+
+    <div class="card">
+      <div class="tilehd" style="margin-bottom:8px"><span class="lbl">Talk to your coach</span></div>
+      <div id="plan-thread-rows" style="max-height:320px;overflow-y:auto"></div>
+      <div id="plan-thread-empty" class="empty" style="display:none">No conversation yet</div>
+      <div class="ask-row">
+        <input type="text" id="plan-ask-input" placeholder="Tell the coach what changed&hellip;" onkeydown="if(event.key==='Enter')askCoachFromPlan()">
+        <button class="primary" onclick="askCoachFromPlan()">Send</button>
+      </div>
+      <div class="cap" style="margin-top:8px"><a href="#" onclick="showView('brief');return false" style="color:var(--violet)">Full conversation &amp; plan brief &#8599;</a></div>
+    </div>
   </div>
 
   <div class="card" style="margin-top:12px">
@@ -792,10 +806,12 @@ function fmtThreadTime(iso){
   return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
 }
 
-function renderThread(entries){
-  var container=document.getElementById('thread-rows');
+function renderThread(entries, rowsId, emptyId){
+  var container=document.getElementById(rowsId);
+  if(!container) return;
   container.innerHTML='';
-  document.getElementById('thread-empty').style.display = entries.length===0 ? 'block' : 'none';
+  var emptyEl=document.getElementById(emptyId);
+  if(emptyEl) emptyEl.style.display = entries.length===0 ? 'block' : 'none';
   entries.forEach(function(e){
     var row=document.createElement('div');
     row.className='threadmsg '+e.role;
@@ -839,13 +855,23 @@ function renderThread(entries){
   container.scrollTop=container.scrollHeight;
 }
 
+var PLAN_THREAD_TAIL=8;
+
+// One fetch, rendered into both windows onto the same conversation -- the
+// full history on the Plan brief page, and a compact tail docked on the
+// Plan tab itself, mirroring the design's docked "Coach" panel.
 function loadThread(){
-  fetch('/coach/thread').then(function(r){return r.json();}).then(renderThread);
+  fetch('/coach/thread?limit=80').then(function(r){return r.json();}).then(function(entries){
+    renderThread(entries, 'thread-rows', 'thread-empty');
+    renderThread(entries.slice(-PLAN_THREAD_TAIL), 'plan-thread-rows', 'plan-thread-empty');
+  });
 }
 
-function appendOptimisticBubble(role, text){
-  var container=document.getElementById('thread-rows');
-  document.getElementById('thread-empty').style.display='none';
+function appendOptimisticBubble(role, text, rowsId){
+  var container=document.getElementById(rowsId);
+  if(!container) return;
+  var emptyEl=document.getElementById(rowsId==='thread-rows' ? 'thread-empty' : 'plan-thread-empty');
+  if(emptyEl) emptyEl.style.display='none';
   var row=document.createElement('div');
   row.className='threadmsg '+role;
   var bubble=document.createElement('div');
@@ -863,17 +889,20 @@ function appendOptimisticBubble(role, text){
 // server doesn't include it yet until that request finishes).
 var threadRequestInFlight=false;
 
-function askCoach(){
-  var input=document.getElementById('ask-input');
+function sendToCoach(inputId, rowsId){
+  var input=document.getElementById(inputId);
   var message=input.value.trim();
   if(!message) return;
   input.value='';
-  appendOptimisticBubble('athlete', message);
+  appendOptimisticBubble('athlete', message, rowsId);
   threadRequestInFlight=true;
   fetch('/coach/ask', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:message})})
     .then(function(){ threadRequestInFlight=false; loadThread(); loadPlanOverview(); })
     .catch(function(){ threadRequestInFlight=false; });
 }
+
+function askCoach(){ sendToCoach('ask-input', 'thread-rows'); }
+function askCoachFromPlan(){ sendToCoach('plan-ask-input', 'plan-thread-rows'); }
 
 function resolveProposal(id, action){
   threadRequestInFlight=true;

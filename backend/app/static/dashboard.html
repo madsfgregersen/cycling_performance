@@ -51,7 +51,7 @@ header.top .inner{max-width:900px;margin:0 auto;display:flex;align-items:center;
 .contrib .stat .n{font-size:21px}
 
 .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px}
-.grid2{display:grid;grid-template-columns:1.2fr 1fr;gap:12px}
+.grid2{display:grid;grid-template-columns:2fr 1fr;gap:12px}
 .tilehd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px}
 
 #tt{position:fixed;pointer-events:none;background:#1B1B18;color:#fff;font-size:11.5px;line-height:1.45;padding:7px 9px;border-radius:8px;opacity:0;transition:opacity .08s;z-index:50;white-space:nowrap}
@@ -233,6 +233,20 @@ input[type=date],input[type=number],input[type=text],select{font:inherit;font-si
 
   <div class="card" style="margin-top:12px">
     <div class="tilehd" style="margin-bottom:8px">
+      <span class="lbl">Projected fitness, fatigue, form (next 14 days)</span>
+    </div>
+    <svg id="plan-load" viewBox="0 0 640 220" aria-label="Actual training load with a 14-day forward projection from planned workouts"></svg>
+    <div id="plan-load-empty" class="empty" style="display:none">No readiness history yet &mdash; run a backfill and recompute first.</div>
+    <div style="display:flex;gap:18px;font-size:12px;color:var(--muted);margin-top:4px;flex-wrap:wrap">
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:2.5px;background:var(--teal);display:inline-block"></span>Fitness (CTL)</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:2.5px;background:var(--coral);display:inline-block"></span>Fatigue (ATL)</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:2.5px;background:var(--form);display:inline-block"></span>Form (TSB)</span>
+      <span style="margin-left:auto;color:var(--faint)">solid = actual &middot; dashed = projected</span>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <div class="tilehd" style="margin-bottom:8px">
       <span class="lbl">Plan structure &mdash; 7 weeks to race day</span>
       <button class="btn" onclick="showView('brief')">Adjust with coach &#8599;</button>
     </div>
@@ -267,20 +281,6 @@ input[type=date],input[type=number],input[type=text],select{font:inherit;font-si
         <button class="primary" onclick="askCoachFromPlan()">Send</button>
       </div>
       <div class="cap" style="margin-top:8px"><a href="#" onclick="showView('brief');return false" style="color:var(--violet)">Full conversation &amp; plan brief &#8599;</a></div>
-    </div>
-  </div>
-
-  <div class="card" style="margin-top:12px">
-    <div class="tilehd" style="margin-bottom:8px">
-      <span class="lbl">Projected fitness, fatigue, form (next 14 days)</span>
-    </div>
-    <svg id="plan-load" viewBox="0 0 640 220" aria-label="Actual training load with a 14-day forward projection from planned workouts"></svg>
-    <div id="plan-load-empty" class="empty" style="display:none">No readiness history yet &mdash; run a backfill and recompute first.</div>
-    <div style="display:flex;gap:18px;font-size:12px;color:var(--muted);margin-top:4px;flex-wrap:wrap">
-      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:2.5px;background:var(--teal);display:inline-block"></span>Fitness (CTL)</span>
-      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:2.5px;background:var(--coral);display:inline-block"></span>Fatigue (ATL)</span>
-      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:2.5px;background:var(--form);display:inline-block"></span>Form (TSB)</span>
-      <span style="margin-left:auto;color:var(--faint)">solid = actual &middot; dashed = projected</span>
     </div>
   </div>
 

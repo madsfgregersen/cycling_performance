@@ -4,7 +4,7 @@ from datetime import timezone as dt_timezone
 
 from sqlalchemy.orm import Session
 
-from . import coach_plan_adjust, coach_plan_structure, coach_qa
+from . import coach_plan_adjust, coach_plan_compile, coach_plan_structure, coach_qa
 from .activity_log import log_event
 from .models import IntegrationLog, PlanAdjustmentProposal
 
@@ -132,6 +132,9 @@ def handle_athlete_message(db: Session, source: str, text: str, notify_telegram:
 
     if intent == "plan_structure":
         return _propose_and_log(db, source, text, coach_plan_structure.propose_structure_change, "block", notify_telegram)
+
+    if intent == "compile":
+        return _propose_and_log(db, source, text, coach_plan_compile.propose_compilation, "compile", notify_telegram)
 
     if intent == "question":
         return _answer_and_log(db, source, text, notify_telegram)

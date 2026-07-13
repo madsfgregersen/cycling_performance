@@ -16,7 +16,7 @@ INTENT_SCHEMA = {
     "properties": {
         "intent": {
             "type": "string",
-            "enum": ["disruption", "plan_structure", "question", "generic"],
+            "enum": ["disruption", "plan_structure", "compile", "question", "generic"],
             "description": (
                 "'disruption' if the athlete is reporting something that affects their near-term "
                 "ability or willingness to train as planned -- illness, injury, travel, missed days, "
@@ -27,10 +27,15 @@ INTENT_SCHEMA = {
                 "speak generally about the whole plan ('make my plan easier', 'can we add more rest "
                 "overall', 'I want to push harder'). When in doubt between disruption and "
                 "plan_structure, prefer whichever fits better -- both are safe, reasoned choices here. "
+                "'compile' if they want an actual, concrete workout put on the calendar for a specific "
+                "day -- 'what should I do today?', 'give me a session for Thursday', 'plan tomorrow's "
+                "ride'. This is asking to turn the plan's intent into a real scheduled session, not to "
+                "adjust an existing one (that's disruption) and not merely to ask about their data "
+                "(that's question). "
                 "'question' if they're asking about their own data or progress rather than asking for "
-                "anything to change -- HRV/sleep/resting-HR trends, recent rides, how a metric is "
-                "moving, whether they're on track for the goal, why a verdict looked a certain way, "
-                "how many hours/how much TSS this week, etc. "
+                "anything to change or to be scheduled -- HRV/sleep/resting-HR trends, recent rides, "
+                "how a metric is moving, whether they're on track for the goal, why a verdict looked a "
+                "certain way, how many hours/how much TSS this week, etc. "
                 "Only classify as 'generic' when the message truly isn't about training load, "
                 "difficulty, progress, or the plan at all -- e.g. subjective check-in numbers, small "
                 "talk, or a question unrelated to their training. Do not default to 'generic' just "

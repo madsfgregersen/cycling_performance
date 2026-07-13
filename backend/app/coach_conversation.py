@@ -23,6 +23,19 @@ def _parse_coach_summary(summary: str):
     return None, summary
 
 
+def echo_athlete_action(source: str, notify_telegram: bool, text: str) -> None:
+    """Telegram's Bot API can't make a message appear as if the athlete
+    sent it -- a bot can only send its own messages. So when the athlete
+    writes from a surface other than Telegram, echo what they said into
+    the chat before the coach's reply, so the conversation still reads
+    coherently there. A no-op for messages that originated on Telegram
+    itself, since they're already visible in that chat."""
+    if notify_telegram and source != "telegram":
+        from . import telegram
+
+        telegram.send_message(f"\U0001F4DD (from dashboard) {text}")
+
+
 def _propose_and_log(db: Session, source: str, message_text: str, propose_fn, kind: str, notify_telegram: bool) -> dict:
     from . import telegram  # local import -- telegram.py imports this module
 
@@ -74,16 +87,19 @@ def handle_athlete_message(db: Session, source: str, text: str, notify_telegram:
 
     if intent == "disruption":
         log_event(db, source, "plan_thread_athlete", text[:500])
+        echo_athlete_action(source, notify_telegram, text)
         return _propose_and_log(db, source, text, coach_plan_adjust.propose_adjustment, "workout", notify_telegram)
 
     if intent == "plan_structure":
         log_event(db, source, "plan_thread_athlete", text[:500])
+        echo_athlete_action(source, notify_telegram, text)
         return _propose_and_log(db, source, text, coach_plan_structure.propose_structure_change, "block", notify_telegram)
 
     if respond_to_generic:
         from . import telegram
 
         log_event(db, source, "plan_thread_athlete", text[:500])
+        echo_athlete_action(source, notify_telegram, text)
         log_event(db, source, "plan_thread_coach", GENERIC_REPLY)
         if notify_telegram:
             telegram.send_message(GENERIC_REPLY)

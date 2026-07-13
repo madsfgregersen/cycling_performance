@@ -14,6 +14,10 @@ ASK_SUBJECTIVE = (
     'Reply with two numbers 1-5 (e.g. "4, 2").'
 )
 
+ASK_RIDE_FEEL = (
+    'How did that one feel? RPE and any notes (e.g. "7/10, legs a bit heavy").'
+)
+
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
 TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "").strip()
@@ -132,26 +136,47 @@ def _send_explanation(db: Session, explanation: dict) -> tuple:
 
 
 def send_post_ride_debrief(db: Session, ride) -> dict:
-    if not messaging_settings.is_enabled(db, "post_ride_debrief"):
+    # Debrief text (story 3) and the feel/RPE ask (story 4) are independent
+    # toggles -- either can run without the other, or neither, in which case
+    # nothing gets sent for this ride at all.
+    debrief_enabled = messaging_settings.is_enabled(db, "post_ride_debrief")
+    ask_enabled = messaging_settings.is_enabled(db, "ride_feel_ask")
+    if not debrief_enabled and not ask_enabled:
         return {"sent": False, "reason": "disabled in messaging settings"}
 
     marker = f"ride_id={ride.id}"
     if _already_logged(db, "ride_debrief_sent", marker):
         return {"sent": False, "reason": "already sent for this ride"}
 
-    explanation = coach_ride.explain_ride(db, ride)
-    if not explanation:
-        log_event(db, "telegram", "ride_debrief_skipped", f"{marker} | coach not configured")
+    parts = []
+    explanation = None
+    if debrief_enabled:
+        explanation = coach_ride.explain_ride(db, ride)
+        if explanation:
+            part = f"{explanation['headline']}\n\n{explanation['why']}"
+            if explanation.get("note"):
+                part += f"\n\n{explanation['note']}"
+            parts.append(part)
+        else:
+            log_event(db, "telegram", "ride_debrief_skipped", f"{marker} | coach not configured")
+
+    if ask_enabled:
+        parts.append(ASK_RIDE_FEEL)
+
+    if not parts:
         return {"sent": False, "reason": "coach unavailable"}
 
-    sent, text = _send_explanation(db, explanation)
+    text = "\n\n".join(parts)
+    sent = send_message(text)
     log_event(
         db,
         "telegram",
         "ride_debrief_sent" if sent else "ride_debrief_send_failed",
         f"{marker} | {text.replace(chr(10), ' | ')}",
     )
-    return {"sent": sent}
+    if sent and ask_enabled:
+        log_event(db, "telegram", "ride_feel_ask_sent", marker)
+    return {"sent": sent, "coach_explained": bool(explanation)}
 
 
 def send_missed_workout_nudge(db: Session) -> dict:
@@ -211,6 +236,31 @@ def send_weekly_summary(db: Session) -> dict:
     return {"sent": sent}
 
 
+def _pending_ride_feel_ask(db: Session):
+    """Return the ride_id an incoming reply is most likely answering, or
+    None. Telegram replies here aren't threaded to a specific message, so --
+    same rule the morning check-in already relies on -- whichever question
+    was asked most recently is assumed to be what the next message answers."""
+    latest_ask = (
+        db.query(IntegrationLog)
+        .filter(
+            IntegrationLog.source == "telegram",
+            IntegrationLog.event.in_(["verdict_sent", "ride_feel_ask_sent"]),
+        )
+        # id as a tiebreaker -- created_at alone isn't fine-grained enough to
+        # order two events landing in the same instant.
+        .order_by(IntegrationLog.created_at.desc(), IntegrationLog.id.desc())
+        .first()
+    )
+    if latest_ask is None or latest_ask.event != "ride_feel_ask_sent":
+        return None
+
+    ride_id = int(latest_ask.summary.split("ride_id=")[1])
+    if _already_logged(db, "ride_feel_answered", f"ride_id={ride_id}"):
+        return None
+    return ride_id
+
+
 def process_update(db: Session, update: dict) -> dict:
     message = update.get("message") or update.get("edited_message")
     if message is None:
@@ -235,7 +285,15 @@ def process_update(db: Session, update: dict) -> dict:
         if message.get("date")
         else date.today()
     )
-    db.add(TelegramCheckin(date=checkin_date, raw_message=text))
+    ride_id = _pending_ride_feel_ask(db)
+    db.add(TelegramCheckin(date=checkin_date, raw_message=text, ride_id=ride_id))
     db.commit()
-    log_event(db, "telegram", "checkin_received", text[:200])
+    if ride_id is not None:
+        log_event(db, "telegram", "ride_feel_answered", f"ride_id={ride_id}")
+    log_event(
+        db,
+        "telegram",
+        "checkin_received",
+        text[:200] if ride_id is None else f"ride_id={ride_id} | {text[:200]}",
+    )
     return {"handled": True}

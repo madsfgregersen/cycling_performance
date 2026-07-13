@@ -234,6 +234,18 @@ def telegram_test(db: Session = Depends(get_db)):
     return telegram.send_morning_verdict(db)
 
 
+@app.get("/telegram/test-ride-debrief/{strava_activity_id}")
+def telegram_test_ride_debrief(strava_activity_id: int, db: Session = Depends(get_db)):
+    ride = (
+        db.query(RideSummary)
+        .filter(RideSummary.strava_activity_id == strava_activity_id)
+        .first()
+    )
+    if ride is None:
+        raise HTTPException(status_code=404, detail="ride not found")
+    return telegram.send_post_ride_debrief(db, ride)
+
+
 @app.get("/coach/context")
 def coach_context_endpoint(db: Session = Depends(get_db)):
     return coach_context.get_coach_context(db)

@@ -78,6 +78,11 @@ class TelegramCheckin(Base):
     id = Column(Integer, primary_key=True)
     date = Column(Date, nullable=False)
     raw_message = Column(Text, nullable=True)
+    # Set when this reply is answering a specific ride's feel/RPE ask,
+    # rather than a generic day-bucketed check-in (see coach-brief story 4).
+    ride_id = Column(
+        Integer, ForeignKey("rides_summary.id", ondelete="SET NULL"), nullable=True
+    )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

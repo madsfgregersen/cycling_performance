@@ -27,7 +27,7 @@ CATALOG = [
         "label": "Ride feel / RPE ask",
         "description": "Asks how a ride felt so subjective and objective data sit together.",
         "story": "4",
-        "built": False,
+        "built": True,
     },
     {
         "key": "missed_workout_nudge",

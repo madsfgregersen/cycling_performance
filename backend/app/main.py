@@ -407,10 +407,12 @@ def coach_thread(limit: int = 50, db: Session = Depends(get_db)):
 @app.post("/coach/ask")
 def coach_ask(body: AskCoachIn, db: Session = Depends(get_db)):
     # Dashboard entry point for the unified plan conversation (stories 6+7)
-    # -- same coach brain as Telegram, just no chat reply: every message
-    # here is presumed plan-related, so a generic classification still
-    # gets a clarifying reply instead of silently doing nothing.
-    return coach_conversation.handle_athlete_message(db, "dashboard", body.message, notify_telegram=False, respond_to_generic=True)
+    # -- same coach brain as Telegram, and a genuine mirror: whatever gets
+    # said here also lands on Telegram, so the conversation is really one
+    # thread regardless of which surface you're on. Every message sent here
+    # is presumed plan-related, so a generic classification still gets a
+    # clarifying reply instead of silently doing nothing.
+    return coach_conversation.handle_athlete_message(db, "dashboard", body.message, notify_telegram=True, respond_to_generic=True)
 
 
 @app.post("/plan/proposals/{proposal_id}/confirm")

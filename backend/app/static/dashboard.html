@@ -843,21 +843,54 @@ function loadThread(){
   fetch('/coach/thread').then(function(r){return r.json();}).then(renderThread);
 }
 
+function appendOptimisticBubble(role, text){
+  var container=document.getElementById('thread-rows');
+  document.getElementById('thread-empty').style.display='none';
+  var row=document.createElement('div');
+  row.className='threadmsg '+role;
+  var bubble=document.createElement('div');
+  bubble.className='bubble';
+  var textEl=document.createElement('div');
+  textEl.textContent=text;
+  bubble.appendChild(textEl);
+  row.appendChild(bubble);
+  container.appendChild(row);
+  container.scrollTop=container.scrollHeight;
+}
+
+// Guards the background poll below from wiping out an optimistic bubble
+// while a send/confirm/reject is still in flight (the real thread on the
+// server doesn't include it yet until that request finishes).
+var threadRequestInFlight=false;
+
 function askCoach(){
   var input=document.getElementById('ask-input');
   var message=input.value.trim();
   if(!message) return;
   input.value='';
+  appendOptimisticBubble('athlete', message);
+  threadRequestInFlight=true;
   fetch('/coach/ask', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:message})})
-    .then(function(){ loadThread(); loadPlanOverview(); });
+    .then(function(){ threadRequestInFlight=false; loadThread(); loadPlanOverview(); })
+    .catch(function(){ threadRequestInFlight=false; });
 }
 
 function resolveProposal(id, action){
+  threadRequestInFlight=true;
   fetch('/plan/proposals/'+id+'/'+action, {method:'POST'})
-    .then(function(){ loadThread(); loadPlanOverview(); });
+    .then(function(){ threadRequestInFlight=false; loadThread(); loadPlanOverview(); })
+    .catch(function(){ threadRequestInFlight=false; });
 }
 
 loadThread();
+
+// Light auto-refresh so a reply that took a few seconds (or a message
+// that came in via Telegram) shows up without needing a manual reload.
+setInterval(function(){
+  if(threadRequestInFlight) return;
+  if(document.visibilityState!=='visible') return;
+  loadThread();
+}, 4000);
 
 function renderMessaging(rows){
   var container=document.getElementById('msg-rows');

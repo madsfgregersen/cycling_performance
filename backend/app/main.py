@@ -151,6 +151,25 @@ def logs(db: Session = Depends(get_db)):
     return activity_log.recent_events(db)
 
 
+@app.get("/rides/recent")
+def rides_recent(limit: int = 10, db: Session = Depends(get_db)):
+    rides = (
+        db.query(RideSummary)
+        .order_by(RideSummary.start_date.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "strava_activity_id": r.strava_activity_id,
+            "date": r.start_date.isoformat(),
+            "name": r.name,
+            "distance_km": round(r.distance_m / 1000, 1) if r.distance_m else None,
+        }
+        for r in rides
+    ]
+
+
 @app.get("/planned-workouts")
 def list_planned_workouts(db: Session = Depends(get_db)):
     return planned_workouts.list_workouts(db)

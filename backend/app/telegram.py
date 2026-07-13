@@ -5,7 +5,7 @@ from datetime import timezone as dt_timezone
 import httpx
 from sqlalchemy.orm import Session
 
-from . import coach_morning, messaging_settings
+from . import coach_missed_workout, coach_morning, coach_ride, coach_weekly_summary, messaging_settings
 from .activity_log import log_event
 from .models import DailyReadiness, IntegrationLog, TelegramCheckin
 
@@ -111,6 +111,104 @@ def send_morning_verdict(db: Session) -> dict:
         db, "telegram", "verdict_sent" if sent else "verdict_send_failed", text.replace("\n", " | ")
     )
     return {"sent": sent, "coach_explained": bool(explanation)}
+
+
+def _already_logged(db: Session, event: str, marker: str) -> bool:
+    return (
+        db.query(IntegrationLog)
+        .filter(IntegrationLog.source == "telegram", IntegrationLog.event == event)
+        .filter(IntegrationLog.summary.like(f"%{marker}%"))
+        .first()
+        is not None
+    )
+
+
+def _send_explanation(db: Session, explanation: dict) -> tuple:
+    text = f"{explanation['headline']}\n\n{explanation['why']}"
+    if explanation.get("note"):
+        text += f"\n\n{explanation['note']}"
+    sent = send_message(text)
+    return sent, text
+
+
+def send_post_ride_debrief(db: Session, ride) -> dict:
+    if not messaging_settings.is_enabled(db, "post_ride_debrief"):
+        return {"sent": False, "reason": "disabled in messaging settings"}
+
+    marker = f"ride_id={ride.id}"
+    if _already_logged(db, "ride_debrief_sent", marker):
+        return {"sent": False, "reason": "already sent for this ride"}
+
+    explanation = coach_ride.explain_ride(db, ride)
+    if not explanation:
+        log_event(db, "telegram", "ride_debrief_skipped", f"{marker} | coach not configured")
+        return {"sent": False, "reason": "coach unavailable"}
+
+    sent, text = _send_explanation(db, explanation)
+    log_event(
+        db,
+        "telegram",
+        "ride_debrief_sent" if sent else "ride_debrief_send_failed",
+        f"{marker} | {text.replace(chr(10), ' | ')}",
+    )
+    return {"sent": sent}
+
+
+def send_missed_workout_nudge(db: Session) -> dict:
+    if not messaging_settings.is_enabled(db, "missed_workout_nudge"):
+        return {"sent": False, "reason": "disabled in messaging settings"}
+
+    checked_date = datetime.now(LOCAL_TZ).date() - timedelta(days=1)
+    context = coach_missed_workout.build_missed_workout_context(db, checked_date)
+    if context is None:
+        return {"sent": False, "reason": "nothing missed"}
+
+    marker = f"date={checked_date.isoformat()}"
+    if _already_logged(db, "missed_workout_sent", marker):
+        return {"sent": False, "reason": "already sent for this date"}
+
+    explanation = coach_missed_workout.explain_missed_workout(db, context)
+    if not explanation:
+        log_event(db, "telegram", "missed_workout_skipped", f"{marker} | coach not configured")
+        return {"sent": False, "reason": "coach unavailable"}
+
+    sent, text = _send_explanation(db, explanation)
+    log_event(
+        db,
+        "telegram",
+        "missed_workout_sent" if sent else "missed_workout_send_failed",
+        f"{marker} | {text.replace(chr(10), ' | ')}",
+    )
+    return {"sent": sent}
+
+
+def send_weekly_summary(db: Session) -> dict:
+    if not messaging_settings.is_enabled(db, "weekly_summary"):
+        return {"sent": False, "reason": "disabled in messaging settings"}
+
+    today_local = datetime.now(LOCAL_TZ).date()
+    week = coach_weekly_summary.find_week_ending_yesterday(today_local)
+    if week is None:
+        return {"sent": False, "reason": "no week boundary today"}
+
+    marker = f"week={week['week']}"
+    if _already_logged(db, "weekly_summary_sent", marker):
+        return {"sent": False, "reason": "already sent for this week"}
+
+    context = coach_weekly_summary.build_weekly_context(db, week)
+    explanation = coach_weekly_summary.explain_week(db, context)
+    if not explanation:
+        log_event(db, "telegram", "weekly_summary_skipped", f"{marker} | coach not configured")
+        return {"sent": False, "reason": "coach unavailable"}
+
+    sent, text = _send_explanation(db, explanation)
+    log_event(
+        db,
+        "telegram",
+        "weekly_summary_sent" if sent else "weekly_summary_send_failed",
+        f"{marker} | {text.replace(chr(10), ' | ')}",
+    )
+    return {"sent": sent}
 
 
 def process_update(db: Session, update: dict) -> dict:

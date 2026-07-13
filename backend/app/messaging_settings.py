@@ -20,7 +20,7 @@ CATALOG = [
         "label": "Post-ride debrief",
         "description": "Interprets a finished ride (EF, decoupling, late-ride fade) against what it was for.",
         "story": "3",
-        "built": False,
+        "built": True,
     },
     {
         "key": "ride_feel_ask",
@@ -34,7 +34,7 @@ CATALOG = [
         "label": "Missed workout nudge",
         "description": "Flags a missed session without silently stacking it onto a later day.",
         "story": "5",
-        "built": False,
+        "built": True,
     },
     {
         "key": "constraint_drift_alert",
@@ -48,7 +48,7 @@ CATALOG = [
         "label": "Weekly / block summary",
         "description": "Wrap-up of how the week or block actually went.",
         "story": "9",
-        "built": False,
+        "built": True,
     },
     {
         "key": "on_track_check",

@@ -134,7 +134,7 @@ def ingest_single_activity(db: Session, activity_id: int) -> dict:
         "ride_created",
         f"activity {activity_id} imported, {stream_rows} stream rows",
     )
-    return {"imported": True, "stream_rows_saved": stream_rows}
+    return {"imported": True, "stream_rows_saved": stream_rows, "ride_id": ride.id}
 
 
 def delete_activity(db: Session, activity_id: int) -> dict:

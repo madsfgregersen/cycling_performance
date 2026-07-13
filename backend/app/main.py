@@ -1,4 +1,5 @@
 from datetime import date as date_type
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -13,7 +14,10 @@ from . import (
     ai_coach,
     backfill,
     coach_context,
+    coach_missed_workout,
     coach_morning,
+    coach_ride,
+    coach_weekly_summary,
     dashboard,
     health_ingest,
     messaging_settings,
@@ -25,6 +29,7 @@ from . import (
     telegram,
 )
 from .database import engine, get_db
+from .models import RideSummary
 
 
 class PlannedWorkoutIn(BaseModel):
@@ -241,3 +246,48 @@ def messaging_settings_update(
     key: str, setting: MessagingSettingIn, db: Session = Depends(get_db)
 ):
     return messaging_settings.set_enabled(db, key, setting.enabled)
+
+
+@app.get("/coach/ride-preview/{strava_activity_id}")
+def coach_ride_preview(strava_activity_id: int, db: Session = Depends(get_db)):
+    ride = (
+        db.query(RideSummary)
+        .filter(RideSummary.strava_activity_id == strava_activity_id)
+        .first()
+    )
+    if ride is None:
+        raise HTTPException(status_code=404, detail="ride not found")
+    return {
+        "context": coach_ride.build_ride_context(db, ride),
+        "explanation": coach_ride.explain_ride(db, ride),
+    }
+
+
+@app.get("/coach/missed-workout-preview")
+def coach_missed_workout_preview(
+    check_date: Optional[date_type] = None, db: Session = Depends(get_db)
+):
+    checked = check_date or (datetime.now(telegram.LOCAL_TZ).date() - timedelta(days=1))
+    context = coach_missed_workout.build_missed_workout_context(db, checked)
+    if context is None:
+        return {"date": checked.isoformat(), "context": None, "explanation": None}
+    return {
+        "context": context,
+        "explanation": coach_missed_workout.explain_missed_workout(db, context),
+    }
+
+
+@app.get("/coach/weekly-summary-preview")
+def coach_weekly_summary_preview(week: Optional[int] = None, db: Session = Depends(get_db)):
+    if week is not None:
+        target_week = next((w for w in race_plan.WEEKS if w["week"] == week), None)
+    else:
+        today_local = datetime.now(telegram.LOCAL_TZ).date()
+        target_week = coach_weekly_summary.find_week_ending_yesterday(today_local)
+    if target_week is None:
+        return {"week": None, "context": None, "explanation": None}
+    context = coach_weekly_summary.build_weekly_context(db, target_week)
+    return {
+        "context": context,
+        "explanation": coach_weekly_summary.explain_week(db, context),
+    }

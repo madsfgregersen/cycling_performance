@@ -2,9 +2,10 @@ import os
 
 import httpx
 
-from . import backfill, readiness
+from . import backfill, readiness, telegram
 from .activity_log import log_event
 from .database import SessionLocal
+from .models import RideSummary
 from .strava import STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET
 
 STRAVA_WEBHOOK_VERIFY_TOKEN = os.environ.get("STRAVA_WEBHOOK_VERIFY_TOKEN", "")
@@ -55,10 +56,19 @@ def process_event(event: dict) -> None:
             )
             return
 
+        new_ride_id = None
         if aspect_type == "create":
-            backfill.ingest_single_activity(db, object_id)
+            result = backfill.ingest_single_activity(db, object_id)
+            new_ride_id = result.get("ride_id")
         elif aspect_type == "delete":
             backfill.delete_activity(db, object_id)
         readiness.recompute(db)
+
+        if new_ride_id is not None:
+            # Recompute above fills in ride_tss -- fetch after, so the
+            # debrief sees it rather than a null.
+            ride = db.query(RideSummary).filter(RideSummary.id == new_ride_id).first()
+            if ride is not None:
+                telegram.send_post_ride_debrief(db, ride)
     finally:
         db.close()

@@ -149,7 +149,7 @@ Slice 1 requires an LLM API. Default: the Anthropic API, which needs a new `ANTH
 
 ## 9. Build status (updated 2026-07-13)
 
-All slices shipped and live except story 10 and the full-plan scope of story 12 (12c). Read this section before touching coach code — it documents real design decisions made during the build, some of which extend beyond what this brief originally specified.
+The entire planned coach scope is shipped and live except two stories the athlete **deliberately parked on 2026-07-13**: story 10 and the full-plan scope of story 12 (12c). Neither is a gap to fill by default — do not pick them up without the athlete explicitly un-parking them. Read this section before touching coach code — it documents real design decisions made during the build, some of which extend beyond what this brief originally specified.
 
 **Shipped:**
 
@@ -164,7 +164,9 @@ All slices shipped and live except story 10 and the full-plan scope of story 12 
 | 5 (12a) | 12 | Single-workout compilation — compile one day's session from block intent |
 | 5 (12b) | 12 | Block compilation — compile a block one week per approval, auto-advancing to the next week on confirm (§8 authorship resolved: compile-and-approve, one week at a time) |
 
-**Not shipped:** story 10 ("am I on track for the event") and story 12c (full-plan compilation — "everything to the event," the heaviest, most-guarded scope; deferred deliberately so the whole plan isn't swept in one flow, per the §8 decision).
+**Parked (deferred by the athlete's decision, 2026-07-13 — not a backlog to clear):**
+- **Story 10** ("am I on track for the event"). Would need the forward projection (CTL/ATL/TSB to race day) + a sense of what the event demands wired into the Q&A coach context (`coach_context.py`), which today only carries goal facts + planned workouts, not the projection. Read-only [Voice] story; no writes.
+- **Story 12c** (full-plan compilation — "everything to the event," the heaviest, most-guarded scope; the §8 decision keeps block fills bounded to one block, so a whole-plan sweep was always going to be its own deliberate scope).
 
 ### Story 12 compilation — the compile branch
 

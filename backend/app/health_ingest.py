@@ -95,12 +95,13 @@ def ingest_payload(db: Session, payload: dict) -> dict:
 
     # health-data-arrived trigger, per the locked architecture: roll
     # CTL/ATL/TSB and push the morning verdict (deduped to once/day), plus
-    # the two other checks that ride along the same daily trigger --
-    # missed-workout and weekly-summary each dedupe on their own key so
-    # re-arriving health data the same day is a no-op.
+    # the other checks that ride along the same daily trigger -- each
+    # dedupes on its own key so re-arriving health data the same day is a
+    # no-op.
     readiness.recompute(db)
     telegram.send_morning_verdict(db)
     telegram.send_missed_workout_nudge(db)
     telegram.send_weekly_summary(db)
+    telegram.send_constraint_drift_alert(db)
 
     return {"saved": saved, "skipped_existing": skipped, "by_metric": by_metric}

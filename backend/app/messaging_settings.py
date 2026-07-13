@@ -41,7 +41,7 @@ CATALOG = [
         "label": "Constraint drift alert",
         "description": "Flags when reality has drifted from the athlete's stated constraints.",
         "story": "8",
-        "built": False,
+        "built": True,
     },
     {
         "key": "weekly_summary",

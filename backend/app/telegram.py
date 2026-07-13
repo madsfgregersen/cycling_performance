@@ -5,9 +5,17 @@ from datetime import timezone as dt_timezone
 import httpx
 from sqlalchemy.orm import Session
 
-from . import coach_missed_workout, coach_morning, coach_ride, coach_weekly_summary, messaging_settings
+from . import (
+    coach_constraint_drift,
+    coach_missed_workout,
+    coach_morning,
+    coach_plan_adjust,
+    coach_ride,
+    coach_weekly_summary,
+    messaging_settings,
+)
 from .activity_log import log_event
-from .models import DailyReadiness, IntegrationLog, TelegramCheckin
+from .models import DailyReadiness, IntegrationLog, PlanAdjustmentProposal, TelegramCheckin
 
 ASK_SUBJECTIVE = (
     'How fresh do you feel today, and how\'s work/life stress? '
@@ -236,6 +244,38 @@ def send_weekly_summary(db: Session) -> dict:
     return {"sent": sent}
 
 
+def send_constraint_drift_alert(db: Session) -> dict:
+    if not messaging_settings.is_enabled(db, "constraint_drift_alert"):
+        return {"sent": False, "reason": "disabled in messaging settings"}
+
+    today_local = datetime.now(LOCAL_TZ).date()
+    marker = f"date={today_local.isoformat()}"
+    if _already_logged(db, "constraint_drift_sent", marker):
+        return {"sent": False, "reason": "already checked today"}
+
+    context = coach_constraint_drift.build_drift_context(db)
+    if context is None:
+        return {"sent": False, "reason": "no active constraints"}
+
+    explanation = coach_constraint_drift.explain_drift(db, context)
+    if not explanation:
+        log_event(db, "telegram", "constraint_drift_skipped", f"{marker} | coach not configured")
+        return {"sent": False, "reason": "coach unavailable"}
+
+    if not explanation.get("drifted"):
+        log_event(db, "telegram", "constraint_drift_checked", f"{marker} | no drift")
+        return {"sent": False, "reason": "no drift"}
+
+    sent, text = _send_explanation(db, explanation)
+    log_event(
+        db,
+        "telegram",
+        "constraint_drift_sent" if sent else "constraint_drift_send_failed",
+        f"{marker} | {text.replace(chr(10), ' | ')}",
+    )
+    return {"sent": sent}
+
+
 def _pending_ride_feel_ask(db: Session):
     """Return the ride_id an incoming reply is most likely answering, or
     None. Telegram replies here aren't threaded to a specific message, so --
@@ -259,6 +299,70 @@ def _pending_ride_feel_ask(db: Session):
     if _already_logged(db, "ride_feel_answered", f"ride_id={ride_id}"):
         return None
     return ride_id
+
+
+def _pending_proposal(db: Session):
+    return (
+        db.query(PlanAdjustmentProposal)
+        .filter(PlanAdjustmentProposal.status == "pending")
+        .order_by(PlanAdjustmentProposal.created_at.desc(), PlanAdjustmentProposal.id.desc())
+        .first()
+    )
+
+
+def _handle_disruption(db: Session, message_text: str) -> None:
+    # Reactive, not proactive -- no messaging-settings toggle, same as the
+    # rest of the "answer when asked" behaviors (see messaging_settings.py).
+    proposal = coach_plan_adjust.propose_adjustment(db, message_text)
+    if proposal is None:
+        log_event(db, "telegram", "disruption_skipped", "no active plan week or coach unavailable")
+        return
+
+    if not proposal["changes"]:
+        send_message(proposal["summary"])
+        log_event(db, "telegram", "disruption_acknowledged", proposal["summary"][:200])
+        return
+
+    row = PlanAdjustmentProposal(
+        trigger_message=message_text,
+        proposal_summary=proposal["summary"],
+        changes=proposal["changes"],
+        status="pending",
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+
+    ask_text = f"{proposal['summary']}\n\nReply YES to apply this, or tell me what you'd rather do instead."
+    sent = send_message(ask_text)
+    log_event(
+        db,
+        "telegram",
+        "plan_adjustment_proposed" if sent else "plan_adjustment_propose_failed",
+        f"proposal_id={row.id} | {ask_text.replace(chr(10), ' | ')}",
+    )
+
+
+def _handle_proposal_reply(db: Session, proposal: PlanAdjustmentProposal, text: str) -> None:
+    marker = f"proposal_id={proposal.id}"
+    decision = coach_plan_adjust.classify_proposal_reply(text)
+
+    if decision == "confirm":
+        applied = coach_plan_adjust.apply_changes(db, proposal.changes)
+        proposal.status = "confirmed"
+        proposal.resolved_at = datetime.now(dt_timezone.utc)
+        db.commit()
+        log_event(db, "telegram", "plan_adjustment_confirmed", f"{marker} | {applied} changes applied")
+        send_message(f"Done — updated {applied} workout(s).")
+    elif decision == "reject":
+        proposal.status = "rejected"
+        proposal.resolved_at = datetime.now(dt_timezone.utc)
+        db.commit()
+        log_event(db, "telegram", "plan_adjustment_rejected", marker)
+        send_message("No problem — left your plan as is.")
+    else:
+        log_event(db, "telegram", "plan_adjustment_unclear", f"{marker} | {text[:200]}")
+        send_message("Just to confirm — want me to apply that change? (yes/no)")
 
 
 def process_update(db: Session, update: dict) -> dict:
@@ -285,6 +389,17 @@ def process_update(db: Session, update: dict) -> dict:
         if message.get("date")
         else date.today()
     )
+
+    # A pending propose-confirm-write action takes priority over everything
+    # else -- this reply is almost certainly answering it.
+    pending_proposal = _pending_proposal(db)
+    if pending_proposal is not None:
+        db.add(TelegramCheckin(date=checkin_date, raw_message=text))
+        db.commit()
+        log_event(db, "telegram", "checkin_received", text[:200])
+        _handle_proposal_reply(db, pending_proposal, text)
+        return {"handled": True}
+
     ride_id = _pending_ride_feel_ask(db)
     db.add(TelegramCheckin(date=checkin_date, raw_message=text, ride_id=ride_id))
     db.commit()
@@ -296,4 +411,10 @@ def process_update(db: Session, update: dict) -> dict:
         "checkin_received",
         text[:200] if ride_id is None else f"ride_id={ride_id} | {text[:200]}",
     )
+
+    if ride_id is None:
+        intent = coach_plan_adjust.classify_message_intent(text)
+        if intent == "disruption":
+            _handle_disruption(db, text)
+
     return {"handled": True}

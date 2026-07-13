@@ -160,3 +160,34 @@ class PlannedWorkout(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class PlanConstraint(Base):
+    """The athlete-authored 'brief' (docs/coach-brief.md section 1): durable
+    standing facts the coach reads before advising or proposing a change.
+    To remember is to add one of these; to recall is to read them. Freeform
+    text by design -- interpretation happens where it's read, not at write
+    time (no invented structure the athlete didn't state)."""
+
+    __tablename__ = "plan_constraints"
+
+    id = Column(Integer, primary_key=True)
+    text = Column(Text, nullable=False)
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class PlanAdjustmentProposal(Base):
+    """A pending propose-confirm-write action (coach-brief principle 4).
+    Holds what the coach proposed to change on the calendar; `changes` is
+    only ever applied to planned_workouts once status becomes 'confirmed'."""
+
+    __tablename__ = "plan_adjustment_proposals"
+
+    id = Column(Integer, primary_key=True)
+    trigger_message = Column(Text, nullable=False)
+    proposal_summary = Column(Text, nullable=False)
+    changes = Column(JSON, nullable=False)
+    status = Column(String, nullable=False, default="pending")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    resolved_at = Column(DateTime(timezone=True), nullable=True)

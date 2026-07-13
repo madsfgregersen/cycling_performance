@@ -13,14 +13,17 @@ from . import (
     activity_log,
     ai_coach,
     backfill,
+    coach_constraint_drift,
     coach_context,
     coach_missed_workout,
     coach_morning,
+    coach_plan_adjust,
     coach_ride,
     coach_weekly_summary,
     dashboard,
     health_ingest,
     messaging_settings,
+    plan_constraints,
     planned_workouts,
     race_plan,
     readiness,
@@ -41,6 +44,10 @@ class PlannedWorkoutIn(BaseModel):
 
 class MessagingSettingIn(BaseModel):
     enabled: bool
+
+
+class ConstraintIn(BaseModel):
+    text: str
 
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -322,3 +329,43 @@ def coach_weekly_summary_preview(week: Optional[int] = None, db: Session = Depen
         "context": context,
         "explanation": coach_weekly_summary.explain_week(db, context),
     }
+
+
+@app.get("/brief/constraints")
+def list_constraints(db: Session = Depends(get_db)):
+    return plan_constraints.list_constraints(db, active_only=False)
+
+
+@app.post("/brief/constraints")
+def add_constraint(constraint: ConstraintIn, db: Session = Depends(get_db)):
+    return plan_constraints.add_constraint(db, constraint.text)
+
+
+@app.delete("/brief/constraints/{constraint_id}")
+def deactivate_constraint(constraint_id: int, db: Session = Depends(get_db)):
+    return plan_constraints.deactivate_constraint(db, constraint_id)
+
+
+@app.get("/coach/drift-preview")
+def coach_drift_preview(db: Session = Depends(get_db)):
+    context = coach_constraint_drift.build_drift_context(db)
+    if context is None:
+        return {"context": None, "explanation": None}
+    return {
+        "context": context,
+        "explanation": coach_constraint_drift.explain_drift(db, context),
+    }
+
+
+@app.get("/coach/disruption-preview")
+def coach_disruption_preview(message: str, db: Session = Depends(get_db)):
+    proposal = coach_plan_adjust.propose_adjustment(db, message)
+    if proposal is None:
+        return {"proposal": None, "reason": "no active plan week or coach unavailable"}
+    return {"proposal": proposal}
+
+
+@app.get("/telegram/test-disruption")
+def telegram_test_disruption(message: str, db: Session = Depends(get_db)):
+    telegram._handle_disruption(db, message)
+    return {"triggered": True}

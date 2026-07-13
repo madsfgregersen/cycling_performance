@@ -129,6 +129,12 @@ input[type=date],input[type=number],input[type=text],select{font:inherit;font-si
 .toggle.on .knob{left:18px}
 .toggle:disabled{cursor:not-allowed;opacity:.6}
 
+.constraintrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:.5px solid var(--line)}
+.constraintrow:last-child{border-bottom:none}
+.constraintrow .ctext{flex:1;font-size:13px}
+.constraintrow .cdel{background:none;border:none;color:var(--faint);cursor:pointer;font-size:16px;padding:0 4px;line-height:1}
+.constraintrow .cdel:hover{color:var(--red)}
+
 @media(max-width:720px){ .grid3{grid-template-columns:1fr} .hero{gap:16px} .week{grid-template-columns:repeat(7,minmax(70px,1fr));overflow-x:auto} .struct-weeks{grid-template-columns:repeat(7,minmax(60px,1fr));overflow-x:auto} }
 </style>
 </head>
@@ -208,6 +214,16 @@ input[type=date],input[type=number],input[type=text],select{font:inherit;font-si
         </div>
       </div>
       <div class="count"><div class="n" id="goal-days">&mdash;</div><div class="cap">days to go</div></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <div class="tilehd" style="margin-bottom:8px"><span class="lbl">Standing constraints &mdash; what the coach reads before advising</span></div>
+    <div id="constraint-rows"></div>
+    <div id="constraint-empty" class="empty" style="display:none">No constraints set yet</div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <input type="text" id="constraint-input" placeholder="e.g. Ride 3x/week minimum" style="flex:1">
+      <button class="btn" onclick="addConstraint()">Add</button>
     </div>
   </div>
 
@@ -650,6 +666,44 @@ function loadPlanOverview(){
 }
 
 loadPlanOverview();
+
+function renderConstraints(rows){
+  var container=document.getElementById('constraint-rows');
+  container.innerHTML='';
+  var active=rows.filter(function(r){return r.active;});
+  document.getElementById('constraint-empty').style.display = active.length===0 ? 'block' : 'none';
+  active.forEach(function(c){
+    var row=document.createElement('div');
+    row.className='constraintrow';
+    var span=document.createElement('span');
+    span.className='ctext';
+    span.textContent=c.text;
+    row.appendChild(span);
+    var del=document.createElement('button');
+    del.className='cdel'; del.textContent='×'; del.title='Remove';
+    del.onclick=function(){ removeConstraint(c.id); };
+    row.appendChild(del);
+    container.appendChild(row);
+  });
+}
+
+function loadConstraints(){
+  fetch('/brief/constraints').then(function(r){return r.json();}).then(renderConstraints);
+}
+
+function addConstraint(){
+  var input=document.getElementById('constraint-input');
+  var text=input.value.trim();
+  if(!text) return;
+  fetch('/brief/constraints', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text:text})})
+    .then(function(){ input.value=''; loadConstraints(); });
+}
+
+function removeConstraint(id){
+  fetch('/brief/constraints/'+id, {method:'DELETE'}).then(loadConstraints);
+}
+
+loadConstraints();
 
 function renderMessaging(rows){
   var container=document.getElementById('msg-rows');

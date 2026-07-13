@@ -141,15 +141,15 @@ Slice 1 requires an LLM API. Default: the Anthropic API, which needs a new `ANTH
 
 ## 8. Open items
 
-- **Story 12 authorship (unresolved).** Does "the coach compiles the brief into workouts, the athlete approves" satisfy *you build, the coach advises* — or must the coach stay strictly suggest-only, with the athlete placing every workout? Decide before building the block scope of story 12. Does not affect slices 1–4.
+- **Story 12 authorship (RESOLVED 2026-07-13).** The decision: *compile-and-approve, one week per approval*. "The coach compiles authored intent, the athlete approves" satisfies *you build, the coach advises* — because the athlete authored the block's intent (phase/focus/zones) and explicitly confirms each result. The guard against overreach into the rejected coach-generated-plan model is scope granularity: at block scope the coach may never write more than **one week per confirmation** (enforced in code — `coach_plan_compile._restrict_to_one_week`), and confirming a week auto-advances to *propose* the next, so the athlete rolls through a block one approval at a time. See §9.
 - **Readiness formula.** The formula the coach explains is a separate, still-open design decision (not a coach task). The coach depends on its output shape (verdict + driver breakdown) — coordinate the field names so §5.1 and the formula agree.
 - **Voice tuning.** The §6 prompt is a draft; expect to refine length and tone against real slice-1 output before it hardens into the reused-everywhere version.
 
 ---
 
-## 9. Build status (updated 2026-07-14)
+## 9. Build status (updated 2026-07-13)
 
-All slices shipped and live except stories 10 and 12. Read this section before touching coach code — it documents real design decisions made during the build, some of which extend beyond what this brief originally specified.
+All slices shipped and live except story 10 and the full-plan scope of story 12 (12c). Read this section before touching coach code — it documents real design decisions made during the build, some of which extend beyond what this brief originally specified.
 
 **Shipped:**
 
@@ -161,8 +161,19 @@ All slices shipped and live except stories 10 and 12. Read this section before t
 | 4 | 6, 8 | Disruption adjustment (propose-confirm-write) + constraint drift alert |
 | — | 7 | Plan structure co-design (the 7-week block plan is now DB-backed and editable, not hardcoded) |
 | — | 11 | Q&A about the athlete's own data |
+| 5 (12a) | 12 | Single-workout compilation — compile one day's session from block intent |
+| 5 (12b) | 12 | Block compilation — compile a block one week per approval, auto-advancing to the next week on confirm (§8 authorship resolved: compile-and-approve, one week at a time) |
 
-**Not shipped:** story 10 ("am I on track for the event") and story 12 (plan compilation — see the open authorship question above, still unresolved as of this writing).
+**Not shipped:** story 10 ("am I on track for the event") and story 12c (full-plan compilation — "everything to the event," the heaviest, most-guarded scope; deferred deliberately so the whole plan isn't swept in one flow, per the §8 decision).
+
+### Story 12 compilation — the compile branch
+
+A **4th reasoning branch** (`coach_plan_compile.py`), classified as intent `compile`, alongside disruption/plan_structure/question behind the same classifier and voice.
+
+- It turns the athlete-authored block intent (phase/focus/zones in `plan_blocks`) into concrete `planned_workouts` rows. Scope — single day (12a) or one week (12b) — is read from the message but **capped to one plan-block week in code** (`_restrict_to_one_week`): the coach can never write two weeks in one approval, even if the model tries. This is the structural enforcement of the §8 "one week per approval" decision, not a prompt request.
+- Compilation reuses the disruption flow's write path: proposals are tagged `kind="compile"` (a one-off day/week) or `kind="compile_block"` (an auto-advancing block fill) and applied by `coach_plan_adjust.apply_changes`. No new table or migration — `kind` was already a free-text column.
+- **Auto-advance:** confirming a `compile_block` week triggers `propose_next_in_block`, which proposes the next un-filled week of the *same* phase as its own pending proposal. Rejecting a week stops the chain. The chain is bounded to the block (when the phase is complete it stops); sweeping the whole plan to the event is 12c's separate, still-deferred scope.
+- The taper/event hard boundary is enforced at both propose and apply time, same as disruption.
 
 ### The conversation model — an important extension beyond the original brief
 

@@ -54,22 +54,15 @@ def echo_athlete_action(source: str, notify_telegram: bool, text: str) -> None:
         telegram.send_message(f"\U0001F4DD (from dashboard) {text}")
 
 
-def _propose_and_log(db: Session, source: str, message_text: str, propose_fn, kind: str, notify_telegram: bool) -> dict:
+def _persist_proposal(db: Session, source: str, trigger_message: str, proposal: dict, kind: str, notify_telegram: bool) -> PlanAdjustmentProposal:
+    """Create a pending propose-confirm-write row and log it to the thread
+    with its proposal_id marker (so the dashboard renders Confirm/Reject) and,
+    on Telegram, the 'reply YES' prompt. Shared by the initial proposal and
+    each auto-advanced block-compile week."""
     from . import telegram  # local import -- telegram.py imports this module
 
-    proposal = propose_fn(db, message_text)
-    if proposal is None:
-        log_event(db, source, "plan_thread_coach", "Sorry, I couldn't work out a proposal for that -- the coach may not be configured.")
-        return {"proposal": None, "reason": "coach unavailable"}
-
-    if not proposal["changes"]:
-        log_event(db, source, "plan_thread_coach", proposal["summary"])
-        if notify_telegram:
-            telegram.send_message(proposal["summary"])
-        return {"proposal": None, "summary": proposal["summary"]}
-
     row = PlanAdjustmentProposal(
-        trigger_message=message_text,
+        trigger_message=trigger_message,
         proposal_summary=proposal["summary"],
         changes=proposal["changes"],
         status="pending",
@@ -86,6 +79,27 @@ def _propose_and_log(db: Session, source: str, message_text: str, propose_fn, ki
         coach_text = proposal["summary"]
 
     log_event(db, source, "plan_thread_coach", f"proposal_id={row.id} | {coach_text}")
+    return row
+
+
+def _propose_and_log(db: Session, source: str, message_text: str, propose_fn, kind: str, notify_telegram: bool) -> dict:
+    from . import telegram  # local import -- telegram.py imports this module
+
+    proposal = propose_fn(db, message_text)
+    if proposal is None:
+        log_event(db, source, "plan_thread_coach", "Sorry, I couldn't work out a proposal for that -- the coach may not be configured.")
+        return {"proposal": None, "reason": "coach unavailable"}
+
+    if not proposal["changes"]:
+        log_event(db, source, "plan_thread_coach", proposal["summary"])
+        if notify_telegram:
+            telegram.send_message(proposal["summary"])
+        return {"proposal": None, "summary": proposal["summary"]}
+
+    # A proposal may pick its own kind (e.g. compile -> 'compile_block' vs
+    # 'compile'); otherwise use the branch default.
+    kind = proposal.get("kind", kind)
+    row = _persist_proposal(db, source, message_text, proposal, kind, notify_telegram)
     return {"proposal": {"id": row.id, "summary": row.proposal_summary, "changes": row.changes, "kind": row.kind}}
 
 
@@ -165,7 +179,24 @@ def resolve_proposal(db: Session, proposal: PlanAdjustmentProposal, decision: st
         proposal.status = "confirmed"
         proposal.resolved_at = datetime.now(dt_timezone.utc)
         db.commit()
-        reply = f"Done — updated {applied} {noun}."
+
+        # Auto-advance (story 12b): after a confirmed block-compile week, offer
+        # the next un-filled week of the same block as its own proposal, so the
+        # athlete rolls through the block one approved week at a time. Rejecting
+        # a week stops the chain. Bounded to the block -- when it's complete,
+        # propose_next_in_block returns None and we fall through to a plain done.
+        if proposal.kind == "compile_block":
+            nxt = coach_plan_compile.propose_next_in_block(db, proposal.changes)
+            if nxt and nxt["changes"]:
+                done = f"Done — updated {applied} {noun}. Here's the next week:"
+                if notify_telegram:
+                    telegram.send_message(done)
+                log_event(db, source, "plan_thread_coach", f"{marker} | {done}")
+                _persist_proposal(db, source, "next week", nxt, "compile_block", notify_telegram)
+                return {"applied": applied, "advanced": True}
+            reply = f"Done — updated {applied} {noun}. That completes the block — name another week or block to keep going."
+        else:
+            reply = f"Done — updated {applied} {noun}."
         result = {"applied": applied}
     elif decision == "reject":
         proposal.status = "rejected"

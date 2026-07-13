@@ -181,9 +181,10 @@ class PlanAdjustmentProposal(Base):
     """A pending propose-confirm-write action (coach-brief principle 4).
     `kind` selects what `changes` is applied to and by which function --
     'workout' -> planned_workouts (story 6, disruption adjustment),
-    'compile' -> planned_workouts (story 12, compiled from block intent;
-    same write path as 'workout'), 'block' -> plan_blocks (story 7). Only
-    ever applied once status becomes 'confirmed'."""
+    'compile'/'compile_block' -> planned_workouts (story 12, compiled from
+    block intent; same write path as 'workout'; 'compile_block' additionally
+    auto-advances to the next week on confirm), 'block' -> plan_blocks
+    (story 7). Only ever applied once status becomes 'confirmed'."""
 
     __tablename__ = "plan_adjustment_proposals"
 

@@ -4,7 +4,7 @@ from datetime import timezone as dt_timezone
 
 from sqlalchemy.orm import Session
 
-from . import ai_coach, plan_constraints, race_plan
+from . import ai_coach, plan_blocks, plan_constraints, race_plan
 from .coach_voice import COACH_SYSTEM_PROMPT
 from .models import DailyReadiness, PlannedWorkout, RideSummary
 
@@ -16,8 +16,8 @@ INTENT_SCHEMA = {
     "properties": {
         "intent": {
             "type": "string",
-            "enum": ["disruption", "generic"],
-            "description": "'disruption' only if the athlete is reporting something that affects their ability to train as planned (illness, injury, travel, missed days, schedule change). 'generic' for anything else, including subjective check-in numbers or small talk.",
+            "enum": ["disruption", "plan_structure", "generic"],
+            "description": "'disruption' only if the athlete is reporting something that affects their near-term ability to train as planned (illness, injury, travel, missed days, schedule change). 'plan_structure' if they're asking to change the overall block plan itself -- phase, focus, or week-level structure (e.g. 'make week 3 a recovery week', 'push more threshold in the build phase'). 'generic' for anything else, including subjective check-in numbers or small talk.",
         },
     },
     "required": ["intent"],
@@ -90,24 +90,19 @@ def classify_proposal_reply(text: str) -> str:
     return result.get("decision", "unclear")
 
 
-def _hard_boundary() -> date:
+def _hard_boundary(db: Session) -> date:
     """The one non-negotiable line: taper week (if the plan has one) or the
     event date itself, whichever comes first. No proposed or confirmed
     change may land on or after this date, no matter what the model says."""
     event_date = datetime.strptime(race_plan.GOAL["date"], "%Y-%m-%d").date()
-    for week in race_plan.WEEKS:
-        if week["phase"] == "taper":
-            return min(datetime.strptime(week["start"], "%Y-%m-%d").date(), event_date)
+    taper = plan_blocks.taper_week(db)
+    if taper is not None:
+        return min(datetime.strptime(taper["start"], "%Y-%m-%d").date(), event_date)
     return event_date
 
 
-def _current_week(today: date):
-    for week in race_plan.WEEKS:
-        start = datetime.strptime(week["start"], "%Y-%m-%d").date()
-        end = datetime.strptime(week["end"], "%Y-%m-%d").date()
-        if start <= today <= end:
-            return week
-    return None
+def _current_week(db: Session, today: date):
+    return plan_blocks.current_block(db, today)
 
 
 def _recent_rides(db: Session, today: date) -> list:
@@ -131,7 +126,7 @@ def _recent_rides(db: Session, today: date) -> list:
 
 
 def build_disruption_context(db: Session, today: date):
-    current_week = _current_week(today)
+    current_week = _current_week(db, today)
     if current_week is None:
         return None
 
@@ -169,7 +164,7 @@ def build_disruption_context(db: Session, today: date):
             else None
         ),
         "recent_rides": _recent_rides(db, today),
-        "guardrail_hard_boundary": _hard_boundary().isoformat(),
+        "guardrail_hard_boundary": _hard_boundary(db).isoformat(),
     }
 
 
@@ -197,7 +192,7 @@ def propose_adjustment(db: Session, message_text: str):
         return None
 
     valid_ids = {w["id"] for w in context["editable_planned_workouts"]}
-    hard_boundary = _hard_boundary()
+    hard_boundary = _hard_boundary(db)
 
     safe_changes = []
     for change in result.get("changes", []):
@@ -217,7 +212,7 @@ def propose_adjustment(db: Session, message_text: str):
 def apply_changes(db: Session, changes: list) -> int:
     """Writes accepted changes to planned_workouts. Re-checks the guardrail
     at apply time too, in case time passed between proposing and confirming."""
-    hard_boundary = _hard_boundary()
+    hard_boundary = _hard_boundary(db)
     applied = 0
     for change in changes:
         try:

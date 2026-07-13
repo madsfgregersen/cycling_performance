@@ -4,7 +4,7 @@ from datetime import timezone as dt_timezone
 
 from sqlalchemy.orm import Session
 
-from . import ai_coach, race_plan
+from . import ai_coach, plan_blocks
 from .coach_voice import COACH_SYSTEM_PROMPT
 from .models import DailyReadiness, PlannedWorkout, RideSummary
 
@@ -22,9 +22,9 @@ WEEKLY_SUMMARY_SCHEMA = {
 }
 
 
-def find_week_ending_yesterday(today: date):
+def find_week_ending_yesterday(db: Session, today: date):
     yesterday = today - timedelta(days=1)
-    for week in race_plan.WEEKS:
+    for week in plan_blocks.list_blocks(db):
         end = datetime.strptime(week["end"], "%Y-%m-%d").date()
         if end == yesterday:
             return week

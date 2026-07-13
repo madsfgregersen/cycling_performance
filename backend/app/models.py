@@ -179,8 +179,9 @@ class PlanConstraint(Base):
 
 class PlanAdjustmentProposal(Base):
     """A pending propose-confirm-write action (coach-brief principle 4).
-    Holds what the coach proposed to change on the calendar; `changes` is
-    only ever applied to planned_workouts once status becomes 'confirmed'."""
+    `kind` selects what `changes` is applied to and by which function --
+    'workout' -> planned_workouts (story 6), 'block' -> plan_blocks
+    (story 7). Only ever applied once status becomes 'confirmed'."""
 
     __tablename__ = "plan_adjustment_proposals"
 
@@ -188,6 +189,28 @@ class PlanAdjustmentProposal(Base):
     trigger_message = Column(Text, nullable=False)
     proposal_summary = Column(Text, nullable=False)
     changes = Column(JSON, nullable=False)
+    kind = Column(String, nullable=False, default="workout")
     status = Column(String, nullable=False, default="pending")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class PlanBlock(Base):
+    """The editable block structure (docs/coach-brief.md story 7) --
+    label/focus/detail/phase per training week. Dates and week numbers are
+    fixed; only these qualitative fields are co-designed with the coach.
+    Replaces the old hardcoded race_plan.WEEKS list as the source of
+    truth."""
+
+    __tablename__ = "plan_blocks"
+
+    week = Column(Integer, primary_key=True)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    phase = Column(String, nullable=False)
+    label = Column(String, nullable=False)
+    focus = Column(String, nullable=False)
+    detail = Column(Text, nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

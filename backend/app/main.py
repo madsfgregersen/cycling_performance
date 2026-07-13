@@ -1,5 +1,6 @@
 from datetime import date as date_type
 from datetime import datetime, timedelta
+from datetime import timezone as dt_timezone
 from pathlib import Path
 from typing import Optional
 
@@ -18,11 +19,13 @@ from . import (
     coach_missed_workout,
     coach_morning,
     coach_plan_adjust,
+    coach_plan_structure,
     coach_ride,
     coach_weekly_summary,
     dashboard,
     health_ingest,
     messaging_settings,
+    plan_blocks,
     plan_constraints,
     planned_workouts,
     race_plan,
@@ -32,7 +35,7 @@ from . import (
     telegram,
 )
 from .database import engine, get_db
-from .models import RideSummary
+from .models import PlanAdjustmentProposal, RideSummary
 
 
 class PlannedWorkoutIn(BaseModel):
@@ -48,6 +51,10 @@ class MessagingSettingIn(BaseModel):
 
 class ConstraintIn(BaseModel):
     text: str
+
+
+class StructureProposeIn(BaseModel):
+    message: str
 
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -212,8 +219,8 @@ def planned_workouts_projection(db: Session = Depends(get_db)):
 
 
 @app.get("/plan/overview")
-def plan_overview():
-    return race_plan.get_overview()
+def plan_overview(db: Session = Depends(get_db)):
+    return race_plan.get_overview(db)
 
 
 @app.post("/telegram/webhook")
@@ -318,10 +325,10 @@ def coach_missed_workout_preview(
 @app.get("/coach/weekly-summary-preview")
 def coach_weekly_summary_preview(week: Optional[int] = None, db: Session = Depends(get_db)):
     if week is not None:
-        target_week = next((w for w in race_plan.WEEKS if w["week"] == week), None)
+        target_week = plan_blocks.get_block(db, week)
     else:
         today_local = datetime.now(telegram.LOCAL_TZ).date()
-        target_week = coach_weekly_summary.find_week_ending_yesterday(today_local)
+        target_week = coach_weekly_summary.find_week_ending_yesterday(db, today_local)
     if target_week is None:
         return {"week": None, "context": None, "explanation": None}
     context = coach_weekly_summary.build_weekly_context(db, target_week)
@@ -369,3 +376,72 @@ def coach_disruption_preview(message: str, db: Session = Depends(get_db)):
 def telegram_test_disruption(message: str, db: Session = Depends(get_db)):
     telegram._handle_disruption(db, message)
     return {"triggered": True}
+
+
+@app.get("/plan/structure/pending")
+def plan_structure_pending(db: Session = Depends(get_db)):
+    row = (
+        db.query(PlanAdjustmentProposal)
+        .filter(PlanAdjustmentProposal.status == "pending", PlanAdjustmentProposal.kind == "block")
+        .order_by(PlanAdjustmentProposal.id.desc())
+        .first()
+    )
+    if row is None:
+        return {"proposal": None}
+    return {"proposal": {"id": row.id, "summary": row.proposal_summary, "changes": row.changes}}
+
+
+@app.post("/plan/structure/propose")
+def plan_structure_propose(body: StructureProposeIn, db: Session = Depends(get_db)):
+    # Dashboard entry point for story 7 -- same coach brain as the Telegram
+    # path (coach_plan_structure.propose_structure_change), just a
+    # dashboard-native confirm/reject instead of a chat reply.
+    proposal = coach_plan_structure.propose_structure_change(db, body.message)
+    if proposal is None:
+        return {"proposal": None, "reason": "coach unavailable"}
+    if not proposal["changes"]:
+        return {"proposal": None, "summary": proposal["summary"]}
+
+    row = PlanAdjustmentProposal(
+        trigger_message=body.message,
+        proposal_summary=proposal["summary"],
+        changes=proposal["changes"],
+        status="pending",
+        kind="block",
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {"proposal": {"id": row.id, "summary": row.proposal_summary, "changes": row.changes}}
+
+
+@app.post("/plan/structure/proposals/{proposal_id}/confirm")
+def plan_structure_confirm(proposal_id: int, db: Session = Depends(get_db)):
+    row = (
+        db.query(PlanAdjustmentProposal)
+        .filter(PlanAdjustmentProposal.id == proposal_id, PlanAdjustmentProposal.status == "pending")
+        .first()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="no pending proposal with that id")
+    applied = coach_plan_structure.apply_block_changes(db, row.changes)
+    row.status = "confirmed"
+    row.resolved_at = datetime.now(dt_timezone.utc)
+    db.commit()
+    telegram.send_message(f"Done — updated {applied} block(s) via the dashboard.")
+    return {"applied": applied}
+
+
+@app.post("/plan/structure/proposals/{proposal_id}/reject")
+def plan_structure_reject(proposal_id: int, db: Session = Depends(get_db)):
+    row = (
+        db.query(PlanAdjustmentProposal)
+        .filter(PlanAdjustmentProposal.id == proposal_id, PlanAdjustmentProposal.status == "pending")
+        .first()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="no pending proposal with that id")
+    row.status = "rejected"
+    row.resolved_at = datetime.now(dt_timezone.utc)
+    db.commit()
+    return {"rejected": True}

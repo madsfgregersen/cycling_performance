@@ -4,7 +4,7 @@ from datetime import timezone as dt_timezone
 
 from sqlalchemy.orm import Session
 
-from . import ai_coach, race_plan, recovery_signals
+from . import ai_coach, plan_blocks, race_plan, recovery_signals
 from .coach_voice import COACH_SYSTEM_PROMPT
 from .models import DailyReadiness, PlannedWorkout, RideSummary, TelegramCheckin
 
@@ -83,15 +83,6 @@ def _yesterdays_checkin(db: Session, yesterday: date):
     return row.raw_message if row else None
 
 
-def _current_block(today: date):
-    for week in race_plan.WEEKS:
-        start = datetime.strptime(week["start"], "%Y-%m-%d").date()
-        end = datetime.strptime(week["end"], "%Y-%m-%d").date()
-        if start <= today <= end:
-            return {"week": week["week"], "label": week["label"], "focus": week["focus"]}
-    return None
-
-
 def _todays_planned_workout(db: Session, today: date):
     row = db.query(PlannedWorkout).filter(PlannedWorkout.date == today).first()
     if row is None:
@@ -122,7 +113,7 @@ def build_morning_context(db: Session):
         "recent_rides": _recent_rides(db),
         "yesterdays_checkin": _yesterdays_checkin(db, yesterday),
         "goal": {**goal, "days_remaining": (event_date - today).days},
-        "current_block": _current_block(today),
+        "current_block": plan_blocks.current_block(db, today),
         "todays_planned_workout": _todays_planned_workout(db, today),
     }
 

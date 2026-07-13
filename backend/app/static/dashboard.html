@@ -234,6 +234,22 @@ input[type=date],input[type=number],input[type=text],select{font:inherit;font-si
   </div>
 
   <div class="card" style="margin-top:12px">
+    <div class="tilehd" style="margin-bottom:8px"><span class="lbl">Adjust plan structure with coach</span></div>
+    <div class="cap" style="margin-bottom:10px">Reads the plan structure above &mdash; e.g. "make week 3 a recovery week" or "push more threshold in the build phase." The taper/race week is never editable.</div>
+    <div id="structure-propose">
+      <textarea id="structure-input" rows="2" placeholder="What would you like to change about the plan?" style="width:100%;font:inherit;font-size:13px;padding:8px;border:.5px solid var(--line2);border-radius:8px;resize:vertical"></textarea>
+      <div style="margin-top:8px"><button class="btn" onclick="proposeStructureChange()">Ask coach</button></div>
+    </div>
+    <div id="structure-pending" style="display:none">
+      <div id="structure-summary" style="font-size:13px;margin-bottom:10px;line-height:1.5"></div>
+      <div style="display:flex;gap:8px">
+        <button class="primary" onclick="confirmStructureProposal()">Confirm</button>
+        <button class="btn" onclick="rejectStructureProposal()">Reject</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
     <div class="wkhd">
       <div class="wknav">
         <button class="arw" onclick="navWeek(-1)">&#8249;</button>
@@ -704,6 +720,55 @@ function removeConstraint(id){
 }
 
 loadConstraints();
+
+var pendingStructureProposalId=null;
+
+function showStructurePending(proposal){
+  pendingStructureProposalId=proposal.id;
+  document.getElementById('structure-propose').style.display='none';
+  document.getElementById('structure-pending').style.display='block';
+  document.getElementById('structure-summary').textContent=proposal.summary;
+}
+
+function showStructureIdle(message){
+  pendingStructureProposalId=null;
+  document.getElementById('structure-propose').style.display='block';
+  document.getElementById('structure-pending').style.display='none';
+  if(message) alert(message);
+}
+
+function loadPendingStructureProposal(){
+  fetch('/plan/structure/pending').then(function(r){return r.json();}).then(function(data){
+    if(data.proposal) showStructurePending(data.proposal);
+  });
+}
+
+function proposeStructureChange(){
+  var input=document.getElementById('structure-input');
+  var message=input.value.trim();
+  if(!message) return;
+  fetch('/plan/structure/propose', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:message})})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      input.value='';
+      if(data.proposal) showStructurePending(data.proposal);
+      else showStructureIdle(data.summary || data.reason || 'Nothing to propose.');
+    });
+}
+
+function confirmStructureProposal(){
+  if(!pendingStructureProposalId) return;
+  fetch('/plan/structure/proposals/'+pendingStructureProposalId+'/confirm', {method:'POST'})
+    .then(function(){ showStructureIdle(); loadPlanOverview(); });
+}
+
+function rejectStructureProposal(){
+  if(!pendingStructureProposalId) return;
+  fetch('/plan/structure/proposals/'+pendingStructureProposalId+'/reject', {method:'POST'})
+    .then(function(){ showStructureIdle(); });
+}
+
+loadPendingStructureProposal();
 
 function renderMessaging(rows){
   var container=document.getElementById('msg-rows');

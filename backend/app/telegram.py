@@ -10,6 +10,7 @@ from . import (
     coach_missed_workout,
     coach_morning,
     coach_plan_adjust,
+    coach_plan_structure,
     coach_ride,
     coach_weekly_summary,
     messaging_settings,
@@ -220,7 +221,7 @@ def send_weekly_summary(db: Session) -> dict:
         return {"sent": False, "reason": "disabled in messaging settings"}
 
     today_local = datetime.now(LOCAL_TZ).date()
-    week = coach_weekly_summary.find_week_ending_yesterday(today_local)
+    week = coach_weekly_summary.find_week_ending_yesterday(db, today_local)
     if week is None:
         return {"sent": False, "reason": "no week boundary today"}
 
@@ -328,6 +329,7 @@ def _handle_disruption(db: Session, message_text: str) -> None:
         proposal_summary=proposal["summary"],
         changes=proposal["changes"],
         status="pending",
+        kind="workout",
     )
     db.add(row)
     db.commit()
@@ -343,17 +345,58 @@ def _handle_disruption(db: Session, message_text: str) -> None:
     )
 
 
+def _handle_plan_structure_request(db: Session, message_text: str) -> None:
+    # Story 7 -- same propose-confirm-write shape as story 6, but targeting
+    # plan_blocks instead of planned_workouts (kind="block" on the shared
+    # proposal table). No messaging-settings toggle, same reasoning as
+    # _handle_disruption.
+    proposal = coach_plan_structure.propose_structure_change(db, message_text)
+    if proposal is None:
+        log_event(db, "telegram", "structure_request_skipped", "coach unavailable")
+        return
+
+    if not proposal["changes"]:
+        send_message(proposal["summary"])
+        log_event(db, "telegram", "structure_request_acknowledged", proposal["summary"][:200])
+        return
+
+    row = PlanAdjustmentProposal(
+        trigger_message=message_text,
+        proposal_summary=proposal["summary"],
+        changes=proposal["changes"],
+        status="pending",
+        kind="block",
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+
+    ask_text = f"{proposal['summary']}\n\nReply YES to apply this, or tell me what you'd rather do instead."
+    sent = send_message(ask_text)
+    log_event(
+        db,
+        "telegram",
+        "plan_structure_proposed" if sent else "plan_structure_propose_failed",
+        f"proposal_id={row.id} | {ask_text.replace(chr(10), ' | ')}",
+    )
+
+
 def _handle_proposal_reply(db: Session, proposal: PlanAdjustmentProposal, text: str) -> None:
     marker = f"proposal_id={proposal.id}"
     decision = coach_plan_adjust.classify_proposal_reply(text)
 
     if decision == "confirm":
-        applied = coach_plan_adjust.apply_changes(db, proposal.changes)
+        if proposal.kind == "block":
+            applied = coach_plan_structure.apply_block_changes(db, proposal.changes)
+            noun = "block(s)"
+        else:
+            applied = coach_plan_adjust.apply_changes(db, proposal.changes)
+            noun = "workout(s)"
         proposal.status = "confirmed"
         proposal.resolved_at = datetime.now(dt_timezone.utc)
         db.commit()
         log_event(db, "telegram", "plan_adjustment_confirmed", f"{marker} | {applied} changes applied")
-        send_message(f"Done — updated {applied} workout(s).")
+        send_message(f"Done — updated {applied} {noun}.")
     elif decision == "reject":
         proposal.status = "rejected"
         proposal.resolved_at = datetime.now(dt_timezone.utc)
@@ -416,5 +459,7 @@ def process_update(db: Session, update: dict) -> dict:
         intent = coach_plan_adjust.classify_message_intent(text)
         if intent == "disruption":
             _handle_disruption(db, text)
+        elif intent == "plan_structure":
+            _handle_plan_structure_request(db, text)
 
     return {"handled": True}

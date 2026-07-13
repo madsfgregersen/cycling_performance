@@ -424,7 +424,7 @@ def plan_proposal_confirm(proposal_id: int, db: Session = Depends(get_db)):
     )
     if row is None:
         raise HTTPException(status_code=404, detail="no pending proposal with that id")
-    activity_log.log_event(db, "dashboard", "plan_thread_athlete", "Confirmed ✓")
+    activity_log.log_event(db, "dashboard", "checkin_received", "Confirmed ✓")
     coach_conversation.echo_athlete_action("dashboard", True, "Confirmed ✓")
     return coach_conversation.resolve_proposal(db, row, "confirm", source="dashboard", notify_telegram=True)
 
@@ -438,6 +438,6 @@ def plan_proposal_reject(proposal_id: int, db: Session = Depends(get_db)):
     )
     if row is None:
         raise HTTPException(status_code=404, detail="no pending proposal with that id")
-    activity_log.log_event(db, "dashboard", "plan_thread_athlete", "Rejected ✕")
+    activity_log.log_event(db, "dashboard", "checkin_received", "Rejected ✕")
     coach_conversation.echo_athlete_action("dashboard", True, "Rejected ✕")
     return coach_conversation.resolve_proposal(db, row, "reject", source="dashboard", notify_telegram=True)

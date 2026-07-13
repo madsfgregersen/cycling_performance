@@ -4,23 +4,41 @@ from datetime import timezone as dt_timezone
 
 from sqlalchemy.orm import Session
 
-from . import coach_plan_adjust, coach_plan_structure
+from . import coach_plan_adjust, coach_plan_structure, coach_qa
 from .activity_log import log_event
 from .models import IntegrationLog, PlanAdjustmentProposal
 
 GENERIC_REPLY = (
-    "That doesn't look like a plan change or a disruption to react to -- "
-    "try describing what happened, or what you'd like to adjust."
+    "That doesn't look like a plan change, a disruption, or a question about "
+    "your data -- try describing what happened, asking about your training, "
+    "or what you'd like to adjust."
 )
 
-_MARKER_RE = re.compile(r"^proposal_id=(\d+) \| (.*)$", re.DOTALL)
+# Everything that counts as a message in the one unified coach conversation
+# -- proactive pushes (their full sent text is already logged) and reactive
+# exchanges (disruption/plan-structure/Q&A), mirrored identically on
+# Telegram and the dashboard's "Talk to your coach" thread.
+COACH_EVENTS = {
+    "verdict_sent",
+    "ride_debrief_sent",
+    "missed_workout_sent",
+    "weekly_summary_sent",
+    "constraint_drift_sent",
+    "plan_thread_coach",
+}
+ATHLETE_EVENTS = {"checkin_received"}
+
+# Generic "key=value | text" prefix used to correlate a logged message back
+# to what it's about (a ride, a date, a week, a proposal) without it being
+# part of the displayed text.
+_MARKER_RE = re.compile(r"^(\w+)=(\S+) \| (.*)$", re.DOTALL)
 
 
-def _parse_coach_summary(summary: str):
+def _strip_marker(summary: str):
     match = _MARKER_RE.match(summary or "")
     if match:
-        return int(match.group(1)), match.group(2)
-    return None, summary
+        return match.group(1), match.group(2), match.group(3)
+    return None, None, summary or ""
 
 
 def echo_athlete_action(source: str, notify_telegram: bool, text: str) -> None:
@@ -71,35 +89,56 @@ def _propose_and_log(db: Session, source: str, message_text: str, propose_fn, ki
     return {"proposal": {"id": row.id, "summary": row.proposal_summary, "changes": row.changes, "kind": row.kind}}
 
 
+def _answer_and_log(db: Session, source: str, question: str, notify_telegram: bool) -> dict:
+    from . import telegram
+
+    recent = get_thread(db, limit=20)
+    answer = coach_qa.answer_question(db, question, recent)
+    if not answer:
+        answer = "Sorry, I couldn't work that out just now -- the coach may not be configured."
+
+    if notify_telegram:
+        telegram.send_message(answer)
+    log_event(db, source, "plan_thread_coach", answer)
+    return {"answer": answer}
+
+
 def handle_athlete_message(db: Session, source: str, text: str, notify_telegram: bool, respond_to_generic: bool = False) -> dict:
     """One coach brain behind every surface. `source` is just which channel
     the message came in on ('telegram' or 'dashboard') -- the reasoning
-    (coach_plan_adjust / coach_plan_structure) doesn't know or care.
+    doesn't know or care. Three grounded reasoning tasks share one voice and
+    one thread: disruption/plan_structure read their own narrow context and
+    may propose a calendar change (propose-confirm-write); question is
+    read-only, answered from coach_context's broader data plus recent
+    thread history.
 
     `respond_to_generic` is the one real behavioral difference between
-    surfaces: on Telegram, a generic message (numbers, small talk) should
-    stay silent like it always has -- this page isn't the only thing
-    Telegram is for. On the dashboard's dedicated "Adjust with coach" page,
-    every message sent there is presumed plan-related, so a generic
-    classification still gets a clarifying reply.
+    surfaces: on Telegram, a generic message (numbers, small talk) stays
+    silent like it always has -- this isn't the only thing Telegram is for.
+    On the dashboard's dedicated "Talk to your coach" box, every message is
+    presumed relevant, so a generic classification still gets a clarifying
+    reply.
     """
+    # Telegram already logs the raw message via process_update before this
+    # is ever called -- logging it again here would duplicate the bubble.
+    if source != "telegram":
+        log_event(db, source, "checkin_received", text[:500])
+    echo_athlete_action(source, notify_telegram, text)
+
     intent = coach_plan_adjust.classify_message_intent(text)
 
     if intent == "disruption":
-        log_event(db, source, "plan_thread_athlete", text[:500])
-        echo_athlete_action(source, notify_telegram, text)
         return _propose_and_log(db, source, text, coach_plan_adjust.propose_adjustment, "workout", notify_telegram)
 
     if intent == "plan_structure":
-        log_event(db, source, "plan_thread_athlete", text[:500])
-        echo_athlete_action(source, notify_telegram, text)
         return _propose_and_log(db, source, text, coach_plan_structure.propose_structure_change, "block", notify_telegram)
+
+    if intent == "question":
+        return _answer_and_log(db, source, text, notify_telegram)
 
     if respond_to_generic:
         from . import telegram
 
-        log_event(db, source, "plan_thread_athlete", text[:500])
-        echo_athlete_action(source, notify_telegram, text)
         log_event(db, source, "plan_thread_coach", GENERIC_REPLY)
         if notify_telegram:
             telegram.send_message(GENERIC_REPLY)
@@ -141,10 +180,10 @@ def resolve_proposal(db: Session, proposal: PlanAdjustmentProposal, decision: st
     return result
 
 
-def get_thread(db: Session, limit: int = 50) -> list:
+def get_thread(db: Session, limit: int = 80) -> list:
     rows = (
         db.query(IntegrationLog)
-        .filter(IntegrationLog.event.in_(["plan_thread_athlete", "plan_thread_coach"]))
+        .filter(IntegrationLog.event.in_(COACH_EVENTS | ATHLETE_EVENTS))
         .order_by(IntegrationLog.created_at.desc(), IntegrationLog.id.desc())
         .limit(limit)
         .all()
@@ -152,16 +191,11 @@ def get_thread(db: Session, limit: int = 50) -> list:
 
     entries = []
     for row in reversed(rows):
-        if row.event == "plan_thread_athlete":
-            entries.append(
-                {"role": "athlete", "text": row.summary, "timestamp": row.created_at.isoformat(), "source": row.source}
-            )
-            continue
-
-        proposal_id, text = _parse_coach_summary(row.summary or "")
-        entry = {"role": "coach", "text": text, "timestamp": row.created_at.isoformat(), "source": row.source}
-        if proposal_id is not None:
-            proposal = db.query(PlanAdjustmentProposal).filter(PlanAdjustmentProposal.id == proposal_id).first()
+        key, value, text = _strip_marker(row.summary)
+        role = "athlete" if row.event in ATHLETE_EVENTS else "coach"
+        entry = {"role": role, "text": text, "timestamp": row.created_at.isoformat(), "source": row.source}
+        if role == "coach" and key == "proposal_id":
+            proposal = db.query(PlanAdjustmentProposal).filter(PlanAdjustmentProposal.id == int(value)).first()
             if proposal is not None:
                 entry["proposal"] = {"id": proposal.id, "status": proposal.status, "kind": proposal.kind}
         entries.append(entry)

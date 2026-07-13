@@ -120,9 +120,7 @@ def send_morning_verdict(db: Session) -> dict:
         )
 
     sent = send_message(text)
-    log_event(
-        db, "telegram", "verdict_sent" if sent else "verdict_send_failed", text.replace("\n", " | ")
-    )
+    log_event(db, "telegram", "verdict_sent" if sent else "verdict_send_failed", text)
     return {"sent": sent, "coach_explained": bool(explanation)}
 
 
@@ -181,7 +179,7 @@ def send_post_ride_debrief(db: Session, ride) -> dict:
         db,
         "telegram",
         "ride_debrief_sent" if sent else "ride_debrief_send_failed",
-        f"{marker} | {text.replace(chr(10), ' | ')}",
+        f"{marker} | {text}",
     )
     if sent and ask_enabled:
         log_event(db, "telegram", "ride_feel_ask_sent", marker)
@@ -211,7 +209,7 @@ def send_missed_workout_nudge(db: Session) -> dict:
         db,
         "telegram",
         "missed_workout_sent" if sent else "missed_workout_send_failed",
-        f"{marker} | {text.replace(chr(10), ' | ')}",
+        f"{marker} | {text}",
     )
     return {"sent": sent}
 
@@ -240,7 +238,7 @@ def send_weekly_summary(db: Session) -> dict:
         db,
         "telegram",
         "weekly_summary_sent" if sent else "weekly_summary_send_failed",
-        f"{marker} | {text.replace(chr(10), ' | ')}",
+        f"{marker} | {text}",
     )
     return {"sent": sent}
 
@@ -272,7 +270,7 @@ def send_constraint_drift_alert(db: Session) -> dict:
         db,
         "telegram",
         "constraint_drift_sent" if sent else "constraint_drift_send_failed",
-        f"{marker} | {text.replace(chr(10), ' | ')}",
+        f"{marker} | {text}",
     )
     return {"sent": sent}
 
@@ -343,7 +341,6 @@ def process_update(db: Session, update: dict) -> dict:
         db.add(TelegramCheckin(date=checkin_date, raw_message=text))
         db.commit()
         log_event(db, "telegram", "checkin_received", text[:200])
-        log_event(db, "telegram", "plan_thread_athlete", text[:500])
         decision = coach_plan_adjust.classify_proposal_reply(text)
         coach_conversation.resolve_proposal(db, pending_proposal, decision, source="telegram", notify_telegram=True)
         return {"handled": True}

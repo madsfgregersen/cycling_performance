@@ -11,25 +11,29 @@ _client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY el
 _logger = logging.getLogger(__name__)
 
 
-def ask_claude(prompt: str, max_tokens: int = 1024) -> str:
+def ask_claude(prompt: str, system: str = None, max_tokens: int = 1024) -> str:
     """Send a single prompt to Claude and return its text response.
 
-    Pure plumbing -- no coaching prompt or behavior lives here. Returns an
-    empty string if ANTHROPIC_API_KEY isn't configured, rather than raising,
-    matching the rest of this app's pattern for optional integrations. Also
-    fails safe (empty string) on a transient API error -- callers up the
-    chain (e.g. Telegram's webhook) must never 500 out and go silent just
-    because one API call hiccuped.
+    Pure plumbing -- no coaching prompt or behavior lives here. `system` is
+    optional so this still works for non-coaching callers (e.g. the plain
+    connectivity ping). Returns an empty string if ANTHROPIC_API_KEY isn't
+    configured, rather than raising, matching the rest of this app's pattern
+    for optional integrations. Also fails safe (empty string) on a transient
+    API error -- callers up the chain (e.g. Telegram's webhook) must never
+    500 out and go silent just because one API call hiccuped.
     """
     if _client is None:
         return ""
 
     try:
-        response = _client.messages.create(
-            model=ANTHROPIC_MODEL,
-            max_tokens=max_tokens,
-            messages=[{"role": "user", "content": prompt}],
-        )
+        kwargs = {
+            "model": ANTHROPIC_MODEL,
+            "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if system:
+            kwargs["system"] = system
+        response = _client.messages.create(**kwargs)
         return "".join(block.text for block in response.content if block.type == "text")
     except Exception:
         _logger.exception("ask_claude failed")

@@ -17,7 +17,21 @@ INTENT_SCHEMA = {
         "intent": {
             "type": "string",
             "enum": ["disruption", "plan_structure", "generic"],
-            "description": "'disruption' only if the athlete is reporting something that affects their near-term ability to train as planned (illness, injury, travel, missed days, schedule change). 'plan_structure' if they're asking to change the overall block plan itself -- phase, focus, or week-level structure (e.g. 'make week 3 a recovery week', 'push more threshold in the build phase'). 'generic' for anything else, including subjective check-in numbers or small talk.",
+            "description": (
+                "'disruption' if the athlete is reporting something that affects their near-term "
+                "ability or willingness to train as planned -- illness, injury, travel, missed days, "
+                "schedule changes, or a general near-term request like 'make this week easier' or "
+                "'I need more rest this week' with no named week/phase. "
+                "'plan_structure' if they want to reshape the plan itself -- phase, focus, volume, or "
+                "intensity, whether they name a specific week/phase ('make week 3 a recovery week') or "
+                "speak generally about the whole plan ('make my plan easier', 'can we add more rest "
+                "overall', 'I want to push harder'). When in doubt between disruption and "
+                "plan_structure, prefer whichever fits better -- both are safe, reasoned choices here. "
+                "Only classify as 'generic' when the message truly isn't about training load, "
+                "difficulty, or the plan at all -- e.g. subjective check-in numbers, small talk, or "
+                "an unrelated question. Do not default to 'generic' just because no specific week was "
+                "named."
+            ),
         },
     },
     "required": ["intent"],

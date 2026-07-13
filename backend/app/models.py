@@ -214,3 +214,22 @@ class PlanBlock(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class RaceGoal(Base):
+    """The target event's own facts (name/date/distance/elevation/hills) --
+    athlete-editable directly (principle 3, 'you build'). Single row.
+    Editing this does not reshape plan_blocks' calendar dates -- that's a
+    separate co-design action, not implied by changing the target."""
+
+    __tablename__ = "race_goal"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    date = Column(Date, nullable=False)
+    distance_km = Column(Float, nullable=True)
+    elevation_m = Column(Float, nullable=True)
+    hills = Column(Integer, nullable=True)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

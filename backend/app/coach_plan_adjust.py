@@ -4,7 +4,7 @@ from datetime import timezone as dt_timezone
 
 from sqlalchemy.orm import Session
 
-from . import ai_coach, plan_blocks, plan_constraints, race_plan
+from . import ai_coach, plan_blocks, plan_constraints, race_goal
 from .coach_voice import COACH_SYSTEM_PROMPT
 from .models import DailyReadiness, PlannedWorkout, RideSummary
 
@@ -94,7 +94,7 @@ def _hard_boundary(db: Session) -> date:
     """The one non-negotiable line: taper week (if the plan has one) or the
     event date itself, whichever comes first. No proposed or confirmed
     change may land on or after this date, no matter what the model says."""
-    event_date = datetime.strptime(race_plan.GOAL["date"], "%Y-%m-%d").date()
+    event_date = datetime.strptime(race_goal.get_goal(db)["date"], "%Y-%m-%d").date()
     taper = plan_blocks.taper_week(db)
     if taper is not None:
         return min(datetime.strptime(taper["start"], "%Y-%m-%d").date(), event_date)

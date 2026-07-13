@@ -2,7 +2,7 @@ import json
 
 from sqlalchemy.orm import Session
 
-from . import ai_coach, plan_blocks, race_plan
+from . import ai_coach, plan_blocks, race_goal
 from .coach_voice import COACH_SYSTEM_PROMPT
 
 STRUCTURE_PROPOSAL_SCHEMA = {
@@ -37,7 +37,7 @@ STRUCTURE_PROPOSAL_SCHEMA = {
 
 
 def build_structure_context(db: Session) -> dict:
-    return {"goal": race_plan.GOAL, "blocks": plan_blocks.list_blocks(db)}
+    return {"goal": race_goal.get_goal(db), "blocks": plan_blocks.list_blocks(db)}
 
 
 def propose_structure_change(db: Session, message_text: str):

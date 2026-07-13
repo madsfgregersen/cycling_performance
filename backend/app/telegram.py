@@ -7,10 +7,10 @@ from sqlalchemy.orm import Session
 
 from . import (
     coach_constraint_drift,
+    coach_conversation,
     coach_missed_workout,
     coach_morning,
     coach_plan_adjust,
-    coach_plan_structure,
     coach_ride,
     coach_weekly_summary,
     messaging_settings,
@@ -311,103 +311,6 @@ def _pending_proposal(db: Session):
     )
 
 
-def _handle_disruption(db: Session, message_text: str) -> None:
-    # Reactive, not proactive -- no messaging-settings toggle, same as the
-    # rest of the "answer when asked" behaviors (see messaging_settings.py).
-    proposal = coach_plan_adjust.propose_adjustment(db, message_text)
-    if proposal is None:
-        log_event(db, "telegram", "disruption_skipped", "no active plan week or coach unavailable")
-        return
-
-    if not proposal["changes"]:
-        send_message(proposal["summary"])
-        log_event(db, "telegram", "disruption_acknowledged", proposal["summary"][:200])
-        return
-
-    row = PlanAdjustmentProposal(
-        trigger_message=message_text,
-        proposal_summary=proposal["summary"],
-        changes=proposal["changes"],
-        status="pending",
-        kind="workout",
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-
-    ask_text = f"{proposal['summary']}\n\nReply YES to apply this, or tell me what you'd rather do instead."
-    sent = send_message(ask_text)
-    log_event(
-        db,
-        "telegram",
-        "plan_adjustment_proposed" if sent else "plan_adjustment_propose_failed",
-        f"proposal_id={row.id} | {ask_text.replace(chr(10), ' | ')}",
-    )
-
-
-def _handle_plan_structure_request(db: Session, message_text: str) -> None:
-    # Story 7 -- same propose-confirm-write shape as story 6, but targeting
-    # plan_blocks instead of planned_workouts (kind="block" on the shared
-    # proposal table). No messaging-settings toggle, same reasoning as
-    # _handle_disruption.
-    proposal = coach_plan_structure.propose_structure_change(db, message_text)
-    if proposal is None:
-        log_event(db, "telegram", "structure_request_skipped", "coach unavailable")
-        return
-
-    if not proposal["changes"]:
-        send_message(proposal["summary"])
-        log_event(db, "telegram", "structure_request_acknowledged", proposal["summary"][:200])
-        return
-
-    row = PlanAdjustmentProposal(
-        trigger_message=message_text,
-        proposal_summary=proposal["summary"],
-        changes=proposal["changes"],
-        status="pending",
-        kind="block",
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-
-    ask_text = f"{proposal['summary']}\n\nReply YES to apply this, or tell me what you'd rather do instead."
-    sent = send_message(ask_text)
-    log_event(
-        db,
-        "telegram",
-        "plan_structure_proposed" if sent else "plan_structure_propose_failed",
-        f"proposal_id={row.id} | {ask_text.replace(chr(10), ' | ')}",
-    )
-
-
-def _handle_proposal_reply(db: Session, proposal: PlanAdjustmentProposal, text: str) -> None:
-    marker = f"proposal_id={proposal.id}"
-    decision = coach_plan_adjust.classify_proposal_reply(text)
-
-    if decision == "confirm":
-        if proposal.kind == "block":
-            applied = coach_plan_structure.apply_block_changes(db, proposal.changes)
-            noun = "block(s)"
-        else:
-            applied = coach_plan_adjust.apply_changes(db, proposal.changes)
-            noun = "workout(s)"
-        proposal.status = "confirmed"
-        proposal.resolved_at = datetime.now(dt_timezone.utc)
-        db.commit()
-        log_event(db, "telegram", "plan_adjustment_confirmed", f"{marker} | {applied} changes applied")
-        send_message(f"Done — updated {applied} {noun}.")
-    elif decision == "reject":
-        proposal.status = "rejected"
-        proposal.resolved_at = datetime.now(dt_timezone.utc)
-        db.commit()
-        log_event(db, "telegram", "plan_adjustment_rejected", marker)
-        send_message("No problem — left your plan as is.")
-    else:
-        log_event(db, "telegram", "plan_adjustment_unclear", f"{marker} | {text[:200]}")
-        send_message("Just to confirm — want me to apply that change? (yes/no)")
-
-
 def process_update(db: Session, update: dict) -> dict:
     message = update.get("message") or update.get("edited_message")
     if message is None:
@@ -440,7 +343,9 @@ def process_update(db: Session, update: dict) -> dict:
         db.add(TelegramCheckin(date=checkin_date, raw_message=text))
         db.commit()
         log_event(db, "telegram", "checkin_received", text[:200])
-        _handle_proposal_reply(db, pending_proposal, text)
+        log_event(db, "telegram", "plan_thread_athlete", text[:500])
+        decision = coach_plan_adjust.classify_proposal_reply(text)
+        coach_conversation.resolve_proposal(db, pending_proposal, decision, source="telegram", notify_telegram=True)
         return {"handled": True}
 
     ride_id = _pending_ride_feel_ask(db)
@@ -456,10 +361,9 @@ def process_update(db: Session, update: dict) -> dict:
     )
 
     if ride_id is None:
-        intent = coach_plan_adjust.classify_message_intent(text)
-        if intent == "disruption":
-            _handle_disruption(db, text)
-        elif intent == "plan_structure":
-            _handle_plan_structure_request(db, text)
+        # respond_to_generic stays False here -- Telegram carries plenty of
+        # non-plan chatter (numeric check-ins, small talk) that should stay
+        # silent, unlike the dashboard's dedicated "Adjust with coach" page.
+        coach_conversation.handle_athlete_message(db, "telegram", text, notify_telegram=True)
 
     return {"handled": True}

@@ -4,7 +4,7 @@ from datetime import timezone as dt_timezone
 
 from sqlalchemy.orm import Session
 
-from . import ai_coach, plan_blocks, race_plan, recovery_signals
+from . import ai_coach, plan_blocks, race_goal, recovery_signals
 from .coach_voice import COACH_SYSTEM_PROMPT
 from .models import DailyReadiness, PlannedWorkout, RideSummary, TelegramCheckin
 
@@ -97,7 +97,7 @@ def build_morning_context(db: Session):
 
     today = date.today()
     yesterday = today - timedelta(days=1)
-    goal = race_plan.GOAL
+    goal = race_goal.get_goal(db)
     event_date = datetime.strptime(goal["date"], "%Y-%m-%d").date()
 
     return {

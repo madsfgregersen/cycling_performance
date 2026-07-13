@@ -3,7 +3,7 @@ from datetime import timezone as dt_timezone
 
 from sqlalchemy.orm import Session
 
-from . import race_plan
+from . import race_goal
 from .models import DailyReadiness, HealthSample, PlannedWorkout, RideSummary, TelegramCheckin
 
 # Personal single-user app; matches the local timezone used elsewhere
@@ -22,7 +22,7 @@ def _local_date(ts: datetime) -> date:
 
 
 def _goal(db: Session) -> dict:
-    goal = race_plan.GOAL
+    goal = race_goal.get_goal(db)
     event_date = datetime.strptime(goal["date"], "%Y-%m-%d").date()
     return {**goal, "days_remaining": (event_date - date.today()).days}
 

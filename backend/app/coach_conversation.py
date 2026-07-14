@@ -1,3 +1,4 @@
+import html
 import re
 from datetime import datetime
 from datetime import timezone as dt_timezone
@@ -47,11 +48,15 @@ def echo_athlete_action(source: str, notify_telegram: bool, text: str) -> None:
     writes from a surface other than Telegram, echo what they said into
     the chat before the coach's reply, so the conversation still reads
     coherently there. A no-op for messages that originated on Telegram
-    itself, since they're already visible in that chat."""
+    itself, since they're already visible in that chat.
+
+    Rendered as a native Telegram blockquote (not a labelled bot line) so it
+    reads as the athlete's own words -- the closest the Bot API allows, since
+    a bot cannot post a message as if the athlete sent it."""
     if notify_telegram and source != "telegram":
         from . import telegram
 
-        telegram.send_message(f"\U0001F4DD (from dashboard) {text}")
+        telegram.send_message(f"<blockquote><i>{html.escape(text)}</i></blockquote>", parse_mode="HTML")
 
 
 def _persist_proposal(db: Session, source: str, trigger_message: str, proposal: dict, kind: str, notify_telegram: bool) -> PlanAdjustmentProposal:

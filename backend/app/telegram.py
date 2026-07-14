@@ -39,13 +39,16 @@ API_BASE = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 LOCAL_TZ = dt_timezone(timedelta(hours=9))
 
 
-def send_message(text: str) -> bool:
+def send_message(text: str, parse_mode=None) -> bool:
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return False
     try:
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text}
+        if parse_mode:
+            payload["parse_mode"] = parse_mode
         response = httpx.post(
             f"{API_BASE}/sendMessage",
-            json={"chat_id": TELEGRAM_CHAT_ID, "text": text},
+            json=payload,
             timeout=10,
         )
         response.raise_for_status()

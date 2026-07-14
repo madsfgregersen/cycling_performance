@@ -152,7 +152,7 @@ def _compile_core(db: Session, message_text: str):
         "nothing should be added (e.g. the week is already full, or it's past the "
         "guardrail), return an empty changes list and explain why in summary."
     )
-    result = ai_coach.ask_claude_structured(prompt, COACH_SYSTEM_PROMPT, COMPILE_SCHEMA)
+    result = ai_coach.ask_claude_structured(prompt, COACH_SYSTEM_PROMPT, COMPILE_SCHEMA, category="compile")
     if not result:
         return None
 
@@ -269,6 +269,7 @@ def _title_from_notes(notes: str, zone) -> str:
         COACH_SYSTEM_PROMPT,
         TITLE_SCHEMA,
         max_tokens=64,
+        category="workout_title",
     )
     return (result.get("title") or "").strip()
 

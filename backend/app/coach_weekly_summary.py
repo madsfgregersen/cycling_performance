@@ -86,4 +86,4 @@ def explain_week(db: Session, context: dict) -> dict:
         "what was planned and to the block's stated focus. Only use the "
         "readiness numbers given -- if a value is null, don't state it."
     )
-    return ai_coach.ask_claude_structured(prompt, COACH_SYSTEM_PROMPT, WEEKLY_SUMMARY_SCHEMA)
+    return ai_coach.ask_claude_structured(prompt, COACH_SYSTEM_PROMPT, WEEKLY_SUMMARY_SCHEMA, category="weekly_summary")

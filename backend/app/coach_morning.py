@@ -128,4 +128,4 @@ def explain_verdict(db: Session) -> dict:
         + json.dumps(context, indent=2)
         + "\n\nExplain today's readiness verdict per your instructions."
     )
-    return ai_coach.ask_claude_structured(prompt, COACH_SYSTEM_PROMPT, VERDICT_EXPLANATION_SCHEMA)
+    return ai_coach.ask_claude_structured(prompt, COACH_SYSTEM_PROMPT, VERDICT_EXPLANATION_SCHEMA, category="morning_verdict")

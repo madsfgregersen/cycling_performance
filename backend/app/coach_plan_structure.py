@@ -58,7 +58,7 @@ def propose_structure_change(db: Session, message_text: str):
         "non-negotiable). Leave a field null if it shouldn't change. If nothing "
         "should change, return an empty changes list and explain why in summary."
     )
-    result = ai_coach.ask_claude_structured(prompt, COACH_SYSTEM_PROMPT, STRUCTURE_PROPOSAL_SCHEMA)
+    result = ai_coach.ask_claude_structured(prompt, COACH_SYSTEM_PROMPT, STRUCTURE_PROPOSAL_SCHEMA, category="plan_structure")
     if not result:
         return None
 

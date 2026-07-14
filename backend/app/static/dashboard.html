@@ -378,6 +378,27 @@ textarea{resize:vertical;line-height:1.45}
 </section>
 <section id="view-logs" class="view">
 <div class="wrap">
+  <div class="card" style="margin-bottom:16px">
+    <div class="tilehd" style="margin-bottom:8px">
+      <span class="lbl">LLM API cost</span>
+      <span id="llm-cost-summary" class="cap"></span>
+    </div>
+    <div class="field" style="max-width:340px;margin-bottom:12px">
+      <label>Active model</label>
+      <select id="llm-model"></select>
+      <div class="cap" style="margin-top:4px">Switching takes effect immediately — no redeploy.</div>
+    </div>
+    <div class="cap" style="margin-bottom:4px">Cost per day (last 30)</div>
+    <div id="llm-daily" style="display:flex;align-items:flex-end;gap:2px;height:64px;margin-bottom:14px"></div>
+    <div style="overflow-x:auto">
+      <table class="logtbl">
+        <thead><tr><th>Workload</th><th>Cost (30d)</th><th>Calls</th></tr></thead>
+        <tbody id="llm-cat-rows"></tbody>
+      </table>
+    </div>
+    <div id="llm-cat-empty" class="empty" style="display:none">No API calls recorded yet</div>
+    <div class="cap" style="margin-top:8px;opacity:.7">Tracking started when this feature shipped; earlier calls weren't recorded.</div>
+  </div>
   <div class="card">
     <div class="tilehd" style="margin-bottom:8px">
       <span class="lbl">Recent communication with data sources</span>
@@ -967,6 +988,46 @@ fetch('/messaging/settings').then(function(r){return r.json();}).then(function(r
 }).catch(function(){
   document.getElementById('msg-empty').style.display='block';
 });
+
+function loadLlmCost(){
+  fetch('/llm/cost?days=30').then(function(r){return r.json();}).then(function(d){
+    var sel=document.getElementById('llm-model');
+    sel.innerHTML='';
+    d.models.forEach(function(m){
+      var o=document.createElement('option');
+      o.value=m.id;
+      o.textContent=m.label+'  ($'+m.input_per_m+' / $'+m.output_per_m+' per M tokens)';
+      if(m.id===d.active_model) o.selected=true;
+      sel.appendChild(o);
+    });
+    sel.onchange=function(){
+      sel.disabled=true;
+      fetch('/llm/model',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:sel.value})})
+        .then(function(){ sel.disabled=false; loadLlmCost(); })
+        .catch(function(){ sel.disabled=false; });
+    };
+    document.getElementById('llm-cost-summary').textContent=
+      'Last '+d.days+' days: $'+d.total_cost.toFixed(2)+' · '+d.total_calls+' calls';
+    var max=Math.max.apply(null, d.daily.map(function(x){return x.cost;}).concat([0.0001]));
+    var wrap=document.getElementById('llm-daily'); wrap.innerHTML='';
+    d.daily.forEach(function(x){
+      var bar=document.createElement('div');
+      var h=Math.round((x.cost/max)*58)+2;
+      bar.style.cssText='flex:1;min-width:3px;background:var(--violet);opacity:'+(x.cost>0?0.85:0.15)+';height:'+h+'px;border-radius:2px';
+      bar.title=x.date+': $'+x.cost.toFixed(4)+' ('+x.calls+' calls)';
+      wrap.appendChild(bar);
+    });
+    var body=document.getElementById('llm-cat-rows'); body.innerHTML='';
+    if(d.by_category.length===0){ document.getElementById('llm-cat-empty').style.display='block'; return; }
+    document.getElementById('llm-cat-empty').style.display='none';
+    d.by_category.forEach(function(c){
+      var tr=document.createElement('tr');
+      tr.innerHTML='<td>'+escapeHtml(c.category)+'</td><td>$'+c.cost.toFixed(4)+'</td><td>'+c.calls+'</td>';
+      body.appendChild(tr);
+    });
+  }).catch(function(){});
+}
+loadLlmCost();
 
 fetch('/logs').then(function(r){return r.json();}).then(function(rows){
   if(rows.length===0){ document.getElementById('log-empty').style.display='block'; return; }

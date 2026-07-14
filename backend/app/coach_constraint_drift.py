@@ -76,4 +76,4 @@ def explain_drift(db: Session, context: dict) -> dict:
         "data that breaches it. If nothing has clearly drifted, set "
         "drifted=false and leave headline/why/note minimal."
     )
-    return ai_coach.ask_claude_structured(prompt, COACH_SYSTEM_PROMPT, DRIFT_SCHEMA)
+    return ai_coach.ask_claude_structured(prompt, COACH_SYSTEM_PROMPT, DRIFT_SCHEMA, category="constraint_drift")

@@ -63,4 +63,4 @@ def explain_missed_workout(db: Session, context: dict) -> dict:
         "assume it will be made up on a later day -- flag it plainly and let "
         "the athlete decide what to do about it."
     )
-    return ai_coach.ask_claude_structured(prompt, COACH_SYSTEM_PROMPT, MISSED_WORKOUT_SCHEMA)
+    return ai_coach.ask_claude_structured(prompt, COACH_SYSTEM_PROMPT, MISSED_WORKOUT_SCHEMA, category="missed_workout")

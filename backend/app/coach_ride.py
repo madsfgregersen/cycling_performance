@@ -65,4 +65,4 @@ def explain_ride(db: Session, ride) -> dict:
         "if planned_workout_that_day is null, it was an unplanned/extra ride "
         "-- say so rather than inventing a purpose for it."
     )
-    return ai_coach.ask_claude_structured(prompt, COACH_SYSTEM_PROMPT, RIDE_DEBRIEF_SCHEMA)
+    return ai_coach.ask_claude_structured(prompt, COACH_SYSTEM_PROMPT, RIDE_DEBRIEF_SCHEMA, category="ride_debrief")

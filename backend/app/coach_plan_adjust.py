@@ -111,6 +111,7 @@ def classify_message_intent(text: str) -> str:
         f'The athlete just sent: "{text}"\n\nClassify its intent.',
         COACH_SYSTEM_PROMPT,
         INTENT_SCHEMA,
+        category="intent_classify",
     )
     # Unconfigured or unparsable -> never guess disruption; worst case is a
     # message that deserved a proposal just gets logged as a plain check-in.
@@ -122,6 +123,7 @@ def classify_proposal_reply(text: str) -> str:
         f'The athlete was asked to confirm a proposed plan change and replied: "{text}"\n\nClassify their reply.',
         COACH_SYSTEM_PROMPT,
         REPLY_SCHEMA,
+        category="proposal_reply",
     )
     # Unconfigured or unparsable -> never silently write (principle 4).
     return result.get("decision", "unclear")
@@ -227,7 +229,7 @@ def propose_adjustment(db: Session, message_text: str):
         "nothing needs to change, return an empty changes list and explain why in "
         "summary."
     )
-    result = ai_coach.ask_claude_structured(prompt, COACH_SYSTEM_PROMPT, PROPOSAL_SCHEMA)
+    result = ai_coach.ask_claude_structured(prompt, COACH_SYSTEM_PROMPT, PROPOSAL_SCHEMA, category="disruption")
     if not result:
         return None
 

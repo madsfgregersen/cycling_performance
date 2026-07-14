@@ -239,3 +239,38 @@ class RaceGoal(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class LlmUsage(Base):
+    """One row per Claude API call: which model, which coach workload, how many
+    tokens (split so cache reads/writes are priced correctly), and the cost in
+    USD computed at write time from llm_pricing. Powers the Logs-page cost
+    monitor. Recorded fail-safe -- a failure to log usage never breaks a coach
+    reply. Cost tracking starts when this table ships; earlier calls weren't
+    recorded and can't be reconstructed."""
+
+    __tablename__ = "llm_usage"
+
+    id = Column(Integer, primary_key=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    model = Column(String, nullable=False)
+    category = Column(String, nullable=False)
+    input_tokens = Column(Integer, nullable=False, default=0)
+    output_tokens = Column(Integer, nullable=False, default=0)
+    cache_read_tokens = Column(Integer, nullable=False, default=0)
+    cache_creation_tokens = Column(Integer, nullable=False, default=0)
+    cost_usd = Column(Float, nullable=False, default=0.0)
+
+
+class AppConfig(Base):
+    """Small key/value store for athlete-editable runtime settings that aren't
+    a domain object of their own -- currently just the active LLM model, so it
+    can be switched from the dashboard without a redeploy."""
+
+    __tablename__ = "app_config"
+
+    key = Column(String, primary_key=True)
+    value = Column(String, nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

@@ -33,4 +33,4 @@ def answer_question(db: Session, question: str, recent_thread: list) -> str:
         "data, say so plainly rather than guessing. Keep it conversational, "
         "not a report."
     )
-    return ai_coach.ask_claude(prompt, system=COACH_SYSTEM_PROMPT)
+    return ai_coach.ask_claude(prompt, system=COACH_SYSTEM_PROMPT, category="qa")

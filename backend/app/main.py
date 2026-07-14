@@ -24,6 +24,8 @@ from . import (
     coach_weekly_summary,
     dashboard,
     health_ingest,
+    llm_pricing,
+    llm_usage,
     messaging_settings,
     plan_blocks,
     plan_constraints,
@@ -175,6 +177,24 @@ def logs(db: Session = Depends(get_db)):
     return activity_log.recent_events(db)
 
 
+class ModelIn(BaseModel):
+    model: str
+
+
+@app.get("/llm/cost")
+def llm_cost(days: int = 30, db: Session = Depends(get_db)):
+    days = max(1, min(days, 90))
+    return llm_usage.report(db, days)
+
+
+@app.put("/llm/model")
+def set_llm_model(body: ModelIn, db: Session = Depends(get_db)):
+    if not llm_pricing.is_known(body.model):
+        raise HTTPException(status_code=400, detail="unknown model")
+    llm_usage.set_active_model(db, body.model)
+    return {"active_model": body.model}
+
+
 @app.get("/rides/recent")
 def rides_recent(limit: int = 10, db: Session = Depends(get_db)):
     rides = (
@@ -285,7 +305,7 @@ def coach_context_endpoint(db: Session = Depends(get_db)):
 
 @app.get("/coach/test-ping")
 def coach_test_ping():
-    text = ai_coach.ask_claude("Reply with exactly one short sentence confirming you received this.")
+    text = ai_coach.ask_claude("Reply with exactly one short sentence confirming you received this.", category="ping")
     return {"configured": bool(ai_coach.ANTHROPIC_API_KEY), "response": text}
 
 

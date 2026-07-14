@@ -16,9 +16,9 @@ RAMP_WINDOW_DAYS = 7
 VERDICT_EXPLANATION_SCHEMA = {
     "type": "object",
     "properties": {
-        "headline": {"type": "string", "description": "One line, e.g. 'Amber — load's the drag, not sleep.'"},
-        "why": {"type": "string", "description": "A short paragraph explaining the read in the coach's voice."},
-        "note": {"type": "string", "description": "One actionable line for today, or an empty string if none is useful."},
+        "headline": {"type": "string", "description": "One short line: the verdict and its single biggest caveat, e.g. 'Amber — load's the drag, not sleep.'"},
+        "why": {"type": "string", "description": "1-2 sentences: the drivers, citing the numbers given. Nothing more."},
+        "note": {"type": "string", "description": "One short actionable line for today, or an empty string if none is useful."},
     },
     "required": ["headline", "why", "note"],
     "additionalProperties": False,

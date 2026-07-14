@@ -4,13 +4,20 @@ from datetime import timezone as dt_timezone
 
 from sqlalchemy.orm import Session
 
+from . import readiness
 from .models import DailyReadiness, HealthSample, IntegrationLog
 
 # Personal single-user app; all recorded samples are in this timezone.
 LOCAL_TZ = dt_timezone(timedelta(hours=9))
 
-LOAD_HISTORY_DAYS = 60
-RECOVERY_HISTORY_NIGHTS = 14
+# Widest history the Training-load chart's range selector can show (360d
+# back). The client slices this down to the chosen range.
+LOAD_HISTORY_DAYS = 360
+# Widest forward projection the range selector can show (180d ahead).
+LOAD_PROJECTION_DAYS = 180
+RECOVERY_HISTORY_NIGHTS = 60
+# Sleep stays a tighter window -- 60 stacked bars would be unreadable.
+SLEEP_HISTORY_NIGHTS = 14
 
 
 def _local_date(ts: datetime) -> date:
@@ -106,7 +113,9 @@ def _recovery_tiles(db: Session) -> dict:
             }
         )
 
-    return {"hrv": hrv, "resting_hr": resting_hr, "sleep": sleep}
+    # HRV + resting HR run the full 60-night window; sleep stays at the
+    # last 14 nights so its stacked bars remain legible.
+    return {"hrv": hrv, "resting_hr": resting_hr, "sleep": sleep[-SLEEP_HISTORY_NIGHTS:]}
 
 
 def _latest_morning_brief(db: Session):
@@ -139,6 +148,7 @@ def get_dashboard_data(db: Session) -> dict:
     return {
         "latest": latest,
         "load_history": load_history,
+        "load_projection": readiness.project_forward(db, horizon_days=LOAD_PROJECTION_DAYS),
         "recovery": _recovery_tiles(db),
         "morning_brief": _latest_morning_brief(db),
     }

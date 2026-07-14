@@ -56,6 +56,12 @@ header.top .inner{max-width:900px;margin:0 auto;display:flex;align-items:center;
 .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px}
 .grid2{display:grid;grid-template-columns:2fr 1fr;gap:12px}
 .tilehd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px}
+.rangebar{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin:2px 0 10px}
+.rangegrp{display:flex;align-items:center;gap:7px}
+.rangegrp .rl{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.04em}
+.seg{display:flex;gap:2px;background:#F0EEE8;padding:3px;border-radius:8px}
+.seg button{font:inherit;font-size:12px;padding:4px 9px;border:none;background:none;border-radius:6px;color:var(--muted);cursor:pointer}
+.seg button.on{background:#fff;color:var(--ink);box-shadow:0 0 0 .5px var(--line)}
 
 #tt{position:fixed;pointer-events:none;background:#1B1B18;color:#fff;font-size:11.5px;line-height:1.45;padding:7px 9px;border-radius:8px;opacity:0;transition:opacity .08s;z-index:50;white-space:nowrap}
 #tt .k{color:#B4B2A9} #tt b{font-family:var(--mono);font-weight:500}
@@ -189,26 +195,39 @@ textarea{resize:vertical;line-height:1.45}
 
   <div class="card" style="margin-top:12px">
     <div class="tilehd" style="margin-bottom:8px">
-      <span class="lbl">Training load &mdash; fitness, fatigue, form (last 60 days)</span>
+      <span class="lbl">Training load &mdash; fitness, fatigue, form</span>
     </div>
-    <svg id="load" viewBox="0 0 640 220" aria-label="Fitness, fatigue and form over the last 60 days"></svg>
+    <div class="rangebar">
+      <div class="rangegrp"><span class="rl">History</span>
+        <div class="seg" id="seg-past">
+          <button data-past="30">30d</button><button data-past="90">90d</button><button data-past="180">180d</button><button data-past="360">360d</button>
+        </div>
+      </div>
+      <div class="rangegrp"><span class="rl">Projection</span>
+        <div class="seg" id="seg-future">
+          <button data-future="15">15d</button><button data-future="30">30d</button><button data-future="90">90d</button><button data-future="180">180d</button>
+        </div>
+      </div>
+    </div>
+    <svg id="load" viewBox="0 0 640 220" aria-label="Fitness, fatigue and form over the selected range"></svg>
     <div id="load-empty" class="empty" style="display:none">No readiness history yet &mdash; run a backfill and recompute first.</div>
     <div style="display:flex;gap:18px;font-size:12px;color:var(--muted);margin-top:4px;flex-wrap:wrap">
       <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:2.5px;background:var(--teal);display:inline-block"></span>Fitness (CTL)</span>
       <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:2.5px;background:var(--coral);display:inline-block"></span>Fatigue (ATL)</span>
       <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:2.5px;background:var(--form);display:inline-block"></span>Form (TSB)</span>
+      <span style="margin-left:auto;color:var(--faint)">solid = actual &middot; dashed = planned</span>
     </div>
   </div>
 
   <div class="grid3">
     <div class="card">
       <div class="tilehd"><span class="lbl">HRV overnight</span><span class="big" id="hrv-latest" style="font-size:21px">&mdash;</span></div>
-      <svg id="hrv" viewBox="0 0 300 118" aria-label="Overnight HRV over the last 14 nights"></svg>
+      <svg id="hrv" viewBox="0 0 300 118" aria-label="Overnight HRV over the last 60 nights"></svg>
       <div id="hrv-empty" class="empty" style="display:none">No HRV data yet</div>
     </div>
     <div class="card">
       <div class="tilehd"><span class="lbl">Resting HR</span><span class="big" id="rhr-latest" style="font-size:21px">&mdash;</span></div>
-      <svg id="rhr" viewBox="0 0 300 118" aria-label="Resting heart rate over the last 14 nights"></svg>
+      <svg id="rhr" viewBox="0 0 300 118" aria-label="Resting heart rate over the last 60 nights"></svg>
       <div id="rhr-empty" class="empty" style="display:none">No resting HR data yet</div>
     </div>
     <div class="card">
@@ -458,6 +477,11 @@ function lineTile(id, points, color, unit, fmt){
     s.appendChild(txt(padL-6,y+3,fmt(tk),'var(--faint)',10,'end',true));});
   var pts=data.map(function(p,i){return X(i).toFixed(1)+','+Y(p.value).toFixed(1);}).join(' ');
   s.appendChild(E('polyline',{points:pts,fill:'none',stroke:color,'stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round'}));
+  /* x-axis date labels, anchored to real dates */
+  axisTicks(data.length,4).forEach(function(idx,j,arr){
+    var anchor=j===0?'start':j===arr.length-1?'end':'middle';
+    s.appendChild(txt(X(idx),d.h-5,fmtAxisDate(data[idx].date),'var(--faint)',9.5,anchor));
+  });
   var last=data[data.length-1];
   s.appendChild(E('circle',{cx:X(data.length-1),cy:Y(last.value),r:3.5,fill:color}));
   var hw=data.length>1?(d.w-padL-padR)/(data.length-1):d.w-padL-padR;
@@ -544,6 +568,11 @@ function loadChart(elId, history, projection){
   var last=history[hn-1];
   s.appendChild(E('circle',{cx:X(hn-1),cy:Y(last.ctl||0),r:3.5,fill:'#1D9E75'}));
   s.appendChild(E('circle',{cx:X(hn-1),cy:Y(last.atl||0),r:3.5,fill:'#D85A30'}));
+  /* x-axis date labels, anchored to the real dates across actual + projected */
+  axisTicks(n,5).forEach(function(idx,j,arr){
+    var anchor=j===0?'start':j===arr.length-1?'end':'middle';
+    s.appendChild(txt(X(idx),d.h-3,fmtAxisDate(all[idx].date),'var(--faint)',9.5,anchor));
+  });
   var hw=(d.w-padL-padR)/((n-1)||1);
   all.forEach(function(row,i){
     var r=E('rect',{x:X(i)-hw/2,y:padT,width:hw,height:d.h-padT-14,fill:'transparent'});
@@ -567,6 +596,41 @@ function fmtDayMonth(iso){
   return d+' '+months[m-1];
 }
 
+/* short axis date: 2026-07-14 -> "14 Jul" */
+var MON3=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function fmtAxisDate(iso){
+  if(!iso)return '';
+  var p=String(iso).split('-');
+  if(p.length<3)return iso;
+  var d=parseInt(p[2],10), m=parseInt(p[1],10);
+  if(!d||m<1||m>12)return iso;
+  return d+' '+MON3[m-1];
+}
+/* pick ~count evenly spaced indices across n items, always including first+last */
+function axisTicks(n,count){
+  if(n<=1)return [0];
+  count=Math.min(count,n);
+  var out=[];
+  for(var i=0;i<count;i++){out.push(Math.round(i*(n-1)/(count-1)));}
+  return out;
+}
+
+/* Training-load range: slice the fetched history/projection client-side so
+   switching ranges is instant (no reload). Defaults: 30d back, 15d forward. */
+var loadRange={past:30,future:15};
+function renderLoadChart(){
+  if(!dashboardData)return;
+  var hist=dashboardData.load_history||[];
+  var proj=dashboardData.load_projection||[];
+  var h=hist.slice(Math.max(0,hist.length-loadRange.past));
+  var p=proj.slice(0,loadRange.future);
+  loadChart('load', h, p);
+  document.querySelectorAll('#seg-past button').forEach(function(b){b.classList.toggle('on',+b.dataset.past===loadRange.past);});
+  document.querySelectorAll('#seg-future button').forEach(function(b){b.classList.toggle('on',+b.dataset.future===loadRange.future);});
+}
+document.getElementById('seg-past').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;loadRange.past=+b.dataset.past;renderLoadChart();});
+document.getElementById('seg-future').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;loadRange.future=+b.dataset.future;renderLoadChart();});
+
 fetch('/dashboard/data').then(function(r){return r.json();}).then(function(data){
   dashboardData=data;
   var latest=data.latest;
@@ -586,7 +650,7 @@ fetch('/dashboard/data').then(function(r){return r.json();}).then(function(data)
     document.getElementById('coach-read').style.display='flex';
   }
 
-  loadChart('load', data.load_history, []);
+  renderLoadChart();
 
   var hrvLast=lineTile('hrv', data.recovery.hrv, '#1D9E75', 'ms', function(v){return v.toFixed(0);});
   document.getElementById('hrv-latest').textContent=hrvLast!==undefined?hrvLast.toFixed(0):'—';

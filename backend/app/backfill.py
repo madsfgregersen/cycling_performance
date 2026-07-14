@@ -13,10 +13,10 @@ STREAM_KEYS = "time,watts,heartrate,cadence,altitude,velocity_smooth,distance,la
 BACKFILL_DAYS = 60
 
 
-def _fetch_activities(db: Session) -> list[dict]:
+def _fetch_activities(db: Session, days: int = BACKFILL_DAYS) -> list[dict]:
     access_token = strava.get_valid_access_token(db)
     headers = {"Authorization": f"Bearer {access_token}"}
-    after = int((datetime.now(timezone.utc) - timedelta(days=BACKFILL_DAYS)).timestamp())
+    after = int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp())
 
     activities = []
     page = 1
@@ -154,8 +154,8 @@ def delete_activity(db: Session, activity_id: int) -> dict:
     return {"deleted": True}
 
 
-def run_backfill(db: Session) -> dict:
-    activities = _fetch_activities(db)
+def run_backfill(db: Session, days: int = BACKFILL_DAYS) -> dict:
+    activities = _fetch_activities(db, days)
 
     imported = 0
     skipped = 0

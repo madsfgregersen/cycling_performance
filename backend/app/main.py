@@ -111,8 +111,8 @@ def strava_status(db: Session = Depends(get_db)):
 
 
 @app.get("/backfill/rides")
-def backfill_rides(db: Session = Depends(get_db)):
-    return backfill.run_backfill(db)
+def backfill_rides(days: int = 60, db: Session = Depends(get_db)):
+    return backfill.run_backfill(db, days)
 
 
 @app.get("/readiness/recompute")

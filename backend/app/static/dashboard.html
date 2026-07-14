@@ -556,12 +556,15 @@ function loadChart(elId, history, projection){
 
 var dashboardData=null;
 
-/* European short date for daily reading: 2026-07-13 -> "13 07" */
+/* European date for daily reading: 2026-07-14 -> "14 July" */
 function fmtDayMonth(iso){
   if(!iso)return '—';
   var p=String(iso).split('-');
   if(p.length<3)return iso;
-  return p[2]+' '+p[1];
+  var months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var d=parseInt(p[2],10), m=parseInt(p[1],10);
+  if(!d||m<1||m>12)return iso;
+  return d+' '+months[m-1];
 }
 
 fetch('/dashboard/data').then(function(r){return r.json();}).then(function(data){

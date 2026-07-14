@@ -49,6 +49,9 @@ header.top .inner{max-width:900px;margin:0 auto;display:flex;align-items:center;
 .contrib{flex:1;min-width:280px;display:flex;gap:28px}
 .contrib .stat{display:flex;flex-direction:column;gap:2px}
 .contrib .stat .n{font-size:21px}
+.coach{display:flex;gap:11px;align-items:flex-start;font-size:13.5px;line-height:1.55;border-top:.5px solid var(--line);margin-top:14px;padding-top:14px}
+.coach .ic{flex:0 0 28px;height:28px;border-radius:50%;background:var(--violet-bg);color:var(--violet);display:flex;align-items:center;justify-content:center;font-size:14px}
+.coach b{color:var(--ink);display:block;margin-bottom:3px}
 
 .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px}
 .grid2{display:grid;grid-template-columns:2fr 1fr;gap:12px}
@@ -177,6 +180,10 @@ textarea{resize:vertical;line-height:1.45}
         <div class="stat"><span class="lbl">Fatigue (ATL)</span><span class="big n" id="atl-value">&mdash;</span></div>
         <div class="stat"><span class="lbl">As of</span><span class="big n" id="latest-date">&mdash;</span></div>
       </div>
+    </div>
+    <div class="coach" id="coach-read" style="display:none">
+      <div class="ic">&#10022;</div>
+      <div><b id="coach-headline"></b><span id="coach-why"></span></div>
     </div>
   </div>
 
@@ -549,6 +556,14 @@ function loadChart(elId, history, projection){
 
 var dashboardData=null;
 
+/* European short date for daily reading: 2026-07-13 -> "13 07" */
+function fmtDayMonth(iso){
+  if(!iso)return '—';
+  var p=String(iso).split('-');
+  if(p.length<3)return iso;
+  return p[2]+' '+p[1];
+}
+
 fetch('/dashboard/data').then(function(r){return r.json();}).then(function(data){
   dashboardData=data;
   var latest=data.latest;
@@ -558,8 +573,16 @@ fetch('/dashboard/data').then(function(r){return r.json();}).then(function(data)
     document.getElementById('tsb-value').innerHTML=(latest.tsb!==null?latest.tsb.toFixed(1):'—')+'<small> TSB</small>';
     document.getElementById('ctl-value').textContent=latest.ctl!==null?latest.ctl.toFixed(1):'—';
     document.getElementById('atl-value').textContent=latest.atl!==null?latest.atl.toFixed(1):'—';
-    document.getElementById('latest-date').textContent=latest.date;
+    document.getElementById('latest-date').textContent=fmtDayMonth(latest.date);
   }
+
+  var brief=data.morning_brief;
+  if(brief && (brief.headline || brief.why)){
+    document.getElementById('coach-headline').textContent=brief.headline||'';
+    document.getElementById('coach-why').textContent=brief.why||'';
+    document.getElementById('coach-read').style.display='flex';
+  }
+
   loadChart('load', data.load_history, []);
 
   var hrvLast=lineTile('hrv', data.recovery.hrv, '#1D9E75', 'ms', function(v){return v.toFixed(0);});

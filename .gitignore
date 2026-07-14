@@ -2,6 +2,9 @@
 .DS_Store
 Railway logs/
 
+# Local design reference mockups, not part of the app
+design/
+
 # Python
 backend/.venv/
 backend/__pycache__/

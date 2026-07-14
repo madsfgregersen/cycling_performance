@@ -1,9 +1,10 @@
+import json
 from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
 
 from sqlalchemy.orm import Session
 
-from .models import DailyReadiness, HealthSample
+from .models import DailyReadiness, HealthSample, IntegrationLog
 
 # Personal single-user app; all recorded samples are in this timezone.
 LOCAL_TZ = dt_timezone(timedelta(hours=9))
@@ -108,6 +109,29 @@ def _recovery_tiles(db: Session) -> dict:
     return {"hrv": hrv, "resting_hr": resting_hr, "sleep": sleep}
 
 
+def _latest_morning_brief(db: Session):
+    """The most recent coach morning brief, cached when the morning verdict
+    was sent (see telegram.send_morning_verdict). Returns None if none has
+    been generated yet -- the Now page then simply hides the coach block."""
+    row = (
+        db.query(IntegrationLog)
+        .filter(IntegrationLog.source == "coach", IntegrationLog.event == "morning_brief")
+        .order_by(IntegrationLog.created_at.desc())
+        .first()
+    )
+    if row is None or not row.summary:
+        return None
+    try:
+        brief = json.loads(row.summary)
+    except (ValueError, TypeError):
+        return None
+    return {
+        "date": brief.get("date"),
+        "headline": brief.get("headline", ""),
+        "why": brief.get("why", ""),
+    }
+
+
 def get_dashboard_data(db: Session) -> dict:
     load_history = _load_history(db)
     latest = load_history[-1] if load_history else None
@@ -116,4 +140,5 @@ def get_dashboard_data(db: Session) -> dict:
         "latest": latest,
         "load_history": load_history,
         "recovery": _recovery_tiles(db),
+        "morning_brief": _latest_morning_brief(db),
     }

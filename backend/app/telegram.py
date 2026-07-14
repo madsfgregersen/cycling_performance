@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
@@ -102,6 +103,22 @@ def send_morning_verdict(db: Session) -> dict:
     emoji = _verdict_emoji(latest.verdict)
 
     if explanation:
+        # Cache this morning's structured brief so the dashboard's Now page
+        # can show the coach's read without making its own live LLM call.
+        # Reuses the integration log -- no new table, no migration.
+        log_event(
+            db,
+            "coach",
+            "morning_brief",
+            json.dumps(
+                {
+                    "date": latest.date.isoformat(),
+                    "headline": explanation.get("headline", ""),
+                    "why": explanation.get("why", ""),
+                    "note": explanation.get("note", ""),
+                }
+            ),
+        )
         text = (
             f"{emoji} {explanation['headline']}\n\n"
             f"{explanation['why']}\n\n"

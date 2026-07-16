@@ -84,7 +84,10 @@ textarea{resize:vertical;line-height:1.45}
 .day .dh{font-size:10px;color:var(--faint);text-align:center}
 .day.today{border-color:var(--violet)}
 .day.today .dh{color:var(--violet);font-weight:600}
-.wo{border-radius:7px;padding:5px 6px;font-size:11px;line-height:1.3;cursor:pointer;border-left:3px solid var(--z2);background:#EAF1F7}
+.day.drop-target{border-color:var(--violet);border-style:dashed;background:var(--violet-bg)}
+.wo{border-radius:7px;padding:5px 6px;font-size:11px;line-height:1.3;cursor:grab;border-left:3px solid var(--z2);background:#EAF1F7;touch-action:none}
+.wo:active{cursor:grabbing}
+.wo-drag-clone{border-radius:7px;padding:5px 6px;font-size:11px;line-height:1.3;border-left:3px solid var(--z2)}
 .wo .t{font-weight:600;display:block}
 .wo .m{font-family:var(--mono);color:var(--muted);font-size:10px}
 .wo.z1{background:#EEF0F2;border-color:var(--z1)}
@@ -720,6 +723,7 @@ function renderWeek(){
     var isToday=(fmtDate(today)===key);
     var cell=document.createElement('div');
     cell.className='day'+(isToday?' today':'');
+    cell.dataset.date=key;
     var dh=document.createElement('div');
     dh.className='dh';
     dh.textContent=dayNames[i]+' '+dd.getDate();
@@ -730,7 +734,7 @@ function renderWeek(){
       wo.className='wo '+(w.zone||'z2');
       wo.innerHTML='<span class="t">'+escapeHtml(w.title||zoneLabel(w.zone))+'</span>'
         +'<span class="m">'+(w.target_tss!=null?Math.round(w.target_tss)+' TSS':'')+'</span>';
-      wo.onclick=(function(w){ return function(){ openWorkoutModal(w.date, w); }; })(w);
+      (function(w,card){ card.addEventListener('pointerdown', function(e){ startWorkoutDrag(e, w, card); }); })(w, wo);
       cell.appendChild(wo);
     });
     var addBtn=document.createElement('button');
@@ -751,6 +755,67 @@ function renderWeek(){
 }
 
 function navWeek(delta){ weekOffset+=delta; renderWeek(); }
+
+/* ---- drag / touch to move a workout between days ----
+   Pointer Events unify mouse + touch. A press that doesn't move past a
+   small threshold is treated as a click (opens the edit modal); a press
+   that moves starts a drag. Drop onto any day cell re-saves the workout
+   with that day's date (reusing PUT /planned-workouts/{id}). */
+var DRAG_THRESHOLD=6;
+var dragState=null;
+function startWorkoutDrag(e, workout, card){
+  if(e.pointerType==='mouse' && e.button!==0) return; /* left button only */
+  dragState={workout:workout, card:card, startX:e.clientX, startY:e.clientY,
+             moved:false, clone:null, offX:0, offY:0, overCell:null};
+}
+function onWorkoutPointerMove(e){
+  var st=dragState; if(!st) return;
+  if(!st.moved){
+    if(Math.abs(e.clientX-st.startX)+Math.abs(e.clientY-st.startY)<DRAG_THRESHOLD) return;
+    st.moved=true;
+    var r=st.card.getBoundingClientRect();
+    var clone=st.card.cloneNode(true);
+    clone.className='wo-drag-clone '+st.card.className.replace('wo','').trim();
+    clone.style.cssText='position:fixed;left:'+r.left+'px;top:'+r.top+'px;width:'+r.width+'px;'
+      +'pointer-events:none;opacity:.9;z-index:9999;transform:rotate(1.5deg);'
+      +'box-shadow:0 8px 22px rgba(0,0,0,.20);background:'+getComputedStyle(st.card).backgroundColor+';'
+      +'border-left:'+getComputedStyle(st.card).borderLeft+';border-radius:7px;padding:5px 6px';
+    document.body.appendChild(clone);
+    st.clone=clone; st.offX=st.startX-r.left; st.offY=st.startY-r.top;
+    st.card.style.opacity='.35';
+    document.body.style.userSelect='none';
+  }
+  st.clone.style.left=(e.clientX-st.offX)+'px';
+  st.clone.style.top=(e.clientY-st.offY)+'px';
+  var el=document.elementFromPoint(e.clientX, e.clientY);
+  var cell=(el && el.closest)?el.closest('.day'):null;
+  if(cell!==st.overCell){
+    if(st.overCell) st.overCell.classList.remove('drop-target');
+    st.overCell=cell;
+    if(cell) cell.classList.add('drop-target');
+  }
+  e.preventDefault();
+}
+function endWorkoutDrag(e){
+  var st=dragState; if(!st) return; dragState=null;
+  document.body.style.userSelect='';
+  if(!st.moved){ openWorkoutModal(st.workout.date, st.workout); return; } /* a click */
+  if(st.clone) st.clone.remove();
+  st.card.style.opacity='';
+  var cell=st.overCell;
+  if(cell){ cell.classList.remove('drop-target'); }
+  if(cell && cell.dataset.date && cell.dataset.date!==st.workout.date){
+    moveWorkoutToDate(st.workout, cell.dataset.date);
+  }
+}
+function moveWorkoutToDate(w, newDate){
+  var body={date:newDate, zone:w.zone, target_tss:w.target_tss, title:w.title, notes:w.notes};
+  fetch('/planned-workouts/'+w.id, {method:'PUT', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)}).then(function(){ loadPlan(); });
+}
+window.addEventListener('pointermove', onWorkoutPointerMove, {passive:false});
+window.addEventListener('pointerup', endWorkoutDrag);
+window.addEventListener('pointercancel', endWorkoutDrag);
 
 function openWorkoutModal(dateStr, workout){
   modalDate=dateStr;

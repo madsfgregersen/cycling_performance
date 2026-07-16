@@ -554,6 +554,9 @@ function sleepTile(id, nights){
   return data[data.length-1].total;
 }
 
+// Goal/event date (ISO yyyy-mm-dd), set from /plan/overview; drawn as a
+// vertical "Event" marker on any load chart whose range spans it.
+var goalDateIso=null;
 function loadChart(elId, history, projection){
   var s=document.getElementById(elId); if(!s) return;
   s.innerHTML='';
@@ -605,6 +608,22 @@ function loadChart(elId, history, projection){
     var anchor=j===0?'start':j===arr.length-1?'end':'middle';
     s.appendChild(txt(X(idx),d.h-3,fmtAxisDate(all[idx].date),'var(--faint)',9.5,anchor));
   });
+  /* event marker: vertical dashed line + "Event" label when the goal date
+     falls within the displayed range (dates are daily, so interpolate by date) */
+  if(goalDateIso && n>1){
+    var et=Date.parse(goalDateIso+'T00:00:00');
+    var t0=Date.parse(all[0].date+'T00:00:00'), t1=Date.parse(all[n-1].date+'T00:00:00');
+    if(!isNaN(et) && et>=t0 && et<=t1){
+      var ex=X(n-1);
+      for(var ei=0; ei<n-1; ei++){
+        var da=Date.parse(all[ei].date+'T00:00:00'), db=Date.parse(all[ei+1].date+'T00:00:00');
+        if(et>=da && et<=db){ ex=X(ei+(db>da?(et-da)/(db-da):0)); break; }
+      }
+      s.appendChild(E('line',{x1:ex,y1:padT-2,x2:ex,y2:d.h-14,stroke:'var(--violet)','stroke-width':1,'stroke-dasharray':'3 3'}));
+      var eAnchor = ex>d.w-padR-28 ? 'end' : (ex<padL+28 ? 'start' : 'middle');
+      s.appendChild(txt(ex,padT-5,'Event','var(--violet)',10,eAnchor));
+    }
+  }
   var hw=(d.w-padL-padR)/((n-1)||1);
   all.forEach(function(row,i){
     var r=E('rect',{x:X(i)-hw/2,y:padT,width:hw,height:d.h-padT-14,fill:'transparent'});
@@ -932,6 +951,11 @@ function showWeekDetail(w){
 function loadPlanOverview(){
   fetch('/plan/overview').then(function(r){return r.json();}).then(function(data){
     var goal=data.goal;
+    goalDateIso=goal.date||null;
+    // Redraw the load charts so the "Event" marker appears once we know the
+    // goal date (this fetch can resolve after the charts first render).
+    if(typeof renderLoadChart==='function') renderLoadChart();
+    if(typeof renderPlanLoadChart==='function') renderPlanLoadChart();
     document.getElementById('goal-name').textContent=goal.name;
     var eventDate=new Date(goal.date+'T00:00:00');
     document.getElementById('goal-date').textContent=eventDate.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'});

@@ -18,6 +18,36 @@ def _local_date(ts: datetime) -> date:
     return ts.astimezone(LOCAL_TZ).date()
 
 
+def canonical_nights(db: Session, max_nights: int) -> list:
+    """One sleep_analysis record per night, most recent `max_nights` nights,
+    oldest first.
+
+    HAE emits many overlapping records for a single night -- cumulative
+    snapshots with progressively later sleepStarts, plus a second source
+    (e.g. AutoSleep). Storing each as its own row made downstream code treat
+    every snapshot as a separate 'night', so it read a late fragment (~1.5h)
+    instead of the complete session (~6.8h) and counted rows, not nights, for
+    the baseline. Collapse by night (the payload's midnight-anchored `date`)
+    and keep the record with the largest totalSleep -- the full session."""
+    rows = (
+        db.query(HealthSample)
+        .filter(HealthSample.metric_name == "sleep_analysis")
+        .all()
+    )
+    best_by_night = {}
+    for row in rows:
+        payload = row.raw_payload or {}
+        key = payload.get("date") or _local_date(row.timestamp).isoformat()
+        total = payload.get("totalSleep") or 0
+        best = best_by_night.get(key)
+        best_total = (best.raw_payload or {}).get("totalSleep") or 0 if best is not None else -1
+        if total > best_total:
+            best_by_night[key] = row
+
+    ordered = sorted(best_by_night.values(), key=lambda r: r.timestamp)
+    return ordered[-max_nights:]
+
+
 def _overnight_avg(db: Session, metric_name: str, sleep_start: datetime, sleep_end: datetime):
     samples = (
         db.query(HealthSample)
@@ -70,14 +100,7 @@ def get_recovery_deviations(db: Session) -> list:
     """Today's overnight recovery signals as deviations from a trailing
     baseline average. Omits any metric where there's no baseline or no
     today's value yet -- never fabricate a deviation."""
-    nights = (
-        db.query(HealthSample)
-        .filter(HealthSample.metric_name == "sleep_analysis")
-        .order_by(HealthSample.timestamp.desc())
-        .limit(BASELINE_NIGHTS + 1)
-        .all()
-    )
-    nights = list(reversed(nights))
+    nights = canonical_nights(db, BASELINE_NIGHTS + 1)
     if len(nights) < 2:
         return []
 

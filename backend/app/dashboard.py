@@ -4,7 +4,7 @@ from datetime import timezone as dt_timezone
 
 from sqlalchemy.orm import Session
 
-from . import readiness
+from . import readiness, recovery_signals
 from .models import DailyReadiness, HealthSample, IntegrationLog
 
 # Personal single-user app; all recorded samples are in this timezone.
@@ -71,14 +71,7 @@ def _resting_hr_for_date(db: Session, night_date: date):
 
 
 def _recovery_tiles(db: Session) -> dict:
-    nights = (
-        db.query(HealthSample)
-        .filter(HealthSample.metric_name == "sleep_analysis")
-        .order_by(HealthSample.timestamp.desc())
-        .limit(RECOVERY_HISTORY_NIGHTS)
-        .all()
-    )
-    nights = list(reversed(nights))
+    nights = recovery_signals.canonical_nights(db, RECOVERY_HISTORY_NIGHTS)
 
     hrv = []
     resting_hr = []

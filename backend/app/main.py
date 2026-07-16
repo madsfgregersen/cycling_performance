@@ -252,8 +252,11 @@ def backfill_workout_titles(db: Session = Depends(get_db)):
 
 
 @app.get("/planned-workouts/projection")
-def planned_workouts_projection(db: Session = Depends(get_db)):
-    return readiness.project_forward(db)
+def planned_workouts_projection(days: int = 14, db: Session = Depends(get_db)):
+    # Horizon is selectable from the dashboard's Projection range control;
+    # clamp to a sane ceiling. Default stays 14 for any other caller.
+    days = max(1, min(days, 400))
+    return readiness.project_forward(db, horizon_days=days)
 
 
 @app.get("/plan/overview")

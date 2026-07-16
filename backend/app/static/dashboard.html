@@ -280,9 +280,21 @@ textarea{resize:vertical;line-height:1.45}
 
   <div class="card" style="margin-top:12px">
     <div class="tilehd" style="margin-bottom:8px">
-      <span class="lbl">Projected fitness, fatigue, form (next 14 days)</span>
+      <span class="lbl">Projected fitness, fatigue, form</span>
     </div>
-    <svg id="plan-load" viewBox="0 0 640 220" aria-label="Actual training load with a 14-day forward projection from planned workouts"></svg>
+    <div class="rangebar">
+      <div class="rangegrp"><span class="rl">History</span>
+        <div class="seg" id="seg-past-plan">
+          <button data-past="30">30d</button><button data-past="90">90d</button><button data-past="180">180d</button><button data-past="360">360d</button>
+        </div>
+      </div>
+      <div class="rangegrp"><span class="rl">Projection</span>
+        <div class="seg" id="seg-future-plan">
+          <button data-future="15">15d</button><button data-future="30">30d</button><button data-future="90">90d</button><button data-future="180">180d</button>
+        </div>
+      </div>
+    </div>
+    <svg id="plan-load" viewBox="0 0 640 220" aria-label="Actual training load with a forward projection from planned workouts"></svg>
     <div id="plan-load-empty" class="empty" style="display:none">No readiness history yet &mdash; run a backfill and recompute first.</div>
     <div style="display:flex;gap:18px;font-size:12px;color:var(--muted);margin-top:4px;flex-wrap:wrap">
       <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:2.5px;background:var(--teal);display:inline-block"></span>Fitness (CTL)</span>
@@ -869,15 +881,32 @@ function deleteWorkoutModal(){
   fetch('/planned-workouts/'+editingId, {method:'DELETE'}).then(function(){ closeWorkoutModal(); loadPlan(); });
 }
 
+/* Plan-page load chart: same History/Projection range controls as the Now
+   page, but its own independent selection. Projection is re-fetched (at the
+   widest horizon) on each loadPlan so it reflects workout edits, then sliced
+   client-side to the chosen range. */
+var planLoadRange={past:30,future:15};
+var planProjectionCache=[];
+function renderPlanLoadChart(){
+  var hist=(dashboardData&&dashboardData.load_history)||[];
+  var h=hist.slice(Math.max(0,hist.length-planLoadRange.past));
+  var p=(planProjectionCache||[]).slice(0,planLoadRange.future);
+  loadChart('plan-load', h, p);
+  document.querySelectorAll('#seg-past-plan button').forEach(function(b){b.classList.toggle('on',+b.dataset.past===planLoadRange.past);});
+  document.querySelectorAll('#seg-future-plan button').forEach(function(b){b.classList.toggle('on',+b.dataset.future===planLoadRange.future);});
+}
+document.getElementById('seg-past-plan').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;planLoadRange.past=+b.dataset.past;renderPlanLoadChart();});
+document.getElementById('seg-future-plan').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;planLoadRange.future=+b.dataset.future;renderPlanLoadChart();});
+
 function loadPlan(){
   Promise.all([
     fetch('/planned-workouts').then(function(r){return r.json();}),
-    fetch('/planned-workouts/projection').then(function(r){return r.json();})
+    fetch('/planned-workouts/projection?days=180').then(function(r){return r.json();})
   ]).then(function(results){
     plannedWorkoutsCache=results[0];
+    planProjectionCache=results[1];
     renderWeek();
-    var history=(dashboardData&&dashboardData.load_history||[]).slice(-14);
-    loadChart('plan-load', history, results[1]);
+    renderPlanLoadChart();
   });
 }
 

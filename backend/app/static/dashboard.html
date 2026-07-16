@@ -162,7 +162,24 @@ textarea{resize:vertical;line-height:1.45}
 .ask-row{display:flex;gap:8px;margin-top:12px}
 .ask-row input{flex:1}
 
-@media(max-width:720px){ .grid3{grid-template-columns:1fr} .grid2{grid-template-columns:1fr} .hero{gap:16px} .week{grid-template-columns:repeat(7,minmax(70px,1fr));overflow-x:auto} .struct-weeks{grid-template-columns:repeat(7,minmax(60px,1fr));overflow-x:auto} }
+@media(max-width:720px){
+  .grid3{grid-template-columns:1fr}
+  .grid2{grid-template-columns:1fr}
+  /* Let stacked cards shrink to the screen so no child (e.g. the week grid)
+     can force the whole page wider than the phone viewport. */
+  .grid2>.card{min-width:0}
+  .hero{gap:16px}
+  /* Calendar: stack the 7 days vertically instead of a row that overflows. */
+  .week{grid-template-columns:1fr}
+  .day{min-height:auto}
+  /* Week-selector strip stays a compact side-scrolling row. */
+  .struct-weeks{grid-template-columns:repeat(7,minmax(60px,1fr));overflow-x:auto}
+  /* Header: let the nav drop to its own full-width row so nothing is cut off. */
+  header.top .inner{flex-wrap:wrap;gap:10px}
+  .brand{font-size:15px}
+  .nav{width:100%;justify-content:space-between}
+  .nav a{flex:1;text-align:center;padding:6px 4px;font-size:12px}
+}
 </style>
 </head>
 <body>

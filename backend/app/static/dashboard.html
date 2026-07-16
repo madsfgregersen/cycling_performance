@@ -252,9 +252,9 @@ textarea{resize:vertical;line-height:1.45}
     </div>
     <div class="card">
       <div class="tilehd"><span class="lbl">Sleep</span><span class="big" id="sleep-latest" style="font-size:21px">&mdash;</span></div>
-      <svg id="sleep" viewBox="0 0 300 118" aria-label="Nightly sleep stages over the last 14 nights"></svg>
+      <svg id="sleep" viewBox="0 0 300 118" aria-label="Nightly total sleep over the last 14 nights with a 5-day running average"></svg>
       <div id="sleep-empty" class="empty" style="display:none">No sleep data yet</div>
-      <div class="cap"><span style="color:var(--deep)">&#9632;</span> deep <span style="color:var(--core)">&#9632;</span> core <span style="color:var(--rem)">&#9632;</span> rem</div>
+      <div class="cap"><span style="display:inline-block;width:9px;height:9px;border:1px solid var(--violet);opacity:.5;border-radius:2px;vertical-align:-1px"></span> nightly total &middot; <span style="display:inline-block;width:14px;height:2px;background:var(--violet);vertical-align:3px"></span> 5-day average</div>
     </div>
   </div>
 
@@ -539,17 +539,25 @@ function sleepTile(id, nights){
   [2,4,6,8].forEach(function(h){if(h>maxH)return;var y=Y(h);s.appendChild(E('line',{x1:padL,y1:y,x2:d.w-padR,y2:y,stroke:'var(--line)','stroke-width':.5}));
     s.appendChild(txt(padL-6,y+3,h+'h','var(--faint)',10,'end',true));});
   var n=data.length,gap=6,bw=(d.w-padL-padR-gap*(n-1))/n,x=padL;
+  function hm(v){var h=Math.floor(v),m=Math.round((v-h)*60);if(m===60){h++;m=0;}return h+':'+(m<10?'0':'')+m;}
+  // 5-day trailing running average of nightly total
+  var avg=data.map(function(_,i){var lo=Math.max(0,i-4),sum=0,c=0;for(var j=lo;j<=i;j++){sum+=data[j].total;c++;}return sum/c;});
+  var centers=[];
+  // outlined bars = nightly total (light, so the trend line reads over them)
+  data.forEach(function(night,i){
+    s.appendChild(E('rect',{x:x,y:Y(night.total),width:bw,height:base-Y(night.total),fill:'none',stroke:'var(--violet)','stroke-opacity':.35,'stroke-width':1,rx:2}));
+    centers.push(x+bw/2);
+    x+=bw+gap;
+  });
+  // 5-day running average line + latest point
+  s.appendChild(E('polyline',{points:avg.map(function(v,i){return centers[i].toFixed(1)+','+Y(v).toFixed(1);}).join(' '),fill:'none',stroke:'var(--violet)','stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round'}));
+  s.appendChild(E('circle',{cx:centers[n-1],cy:Y(avg[n-1]),r:3.5,fill:'var(--violet)'}));
+  // hover hit zones (on top so they catch the mouse everywhere)
   data.forEach(function(night,i){
     var deep=night.deep||0, rem=night.rem||0, core=night.core||(night.total-deep-rem);
-    var yTop=Y(night.total);
-    s.appendChild(E('rect',{x:x,y:yTop,width:bw,height:Y(0)-Y(rem),fill:'#7F77DD',rx:2}));
-    s.appendChild(E('rect',{x:x,y:yTop+(Y(0)-Y(rem)),width:bw,height:Y(0)-Y(core),fill:'#5DCAA5'}));
-    s.appendChild(E('rect',{x:x,y:yTop+(Y(0)-Y(rem))+(Y(0)-Y(core)),width:bw,height:Y(0)-Y(deep),fill:'#0F6E56'}));
-    var hh=Math.floor(night.total),mm=Math.round((night.total-hh)*60);var lab=hh+':'+(mm<10?'0':'')+mm;
-    var hit=E('rect',{x:x,y:padT,width:bw,height:base-padT,fill:'transparent'});hit.style.cursor='crosshair';
-    hit.addEventListener('mousemove',function(ev){tipShow(ev,'<span class="k">'+night.date+'</span><br><b>'+lab+'</b> total<br><span class="k">deep '+deep.toFixed(1)+'h &middot; core '+core.toFixed(1)+'h &middot; rem '+rem.toFixed(1)+'h</span>');});
+    var hit=E('rect',{x:centers[i]-bw/2,y:padT,width:bw,height:base-padT,fill:'transparent'});hit.style.cursor='crosshair';
+    hit.addEventListener('mousemove',function(ev){tipShow(ev,'<span class="k">'+night.date+'</span><br><b>'+hm(night.total)+'</b> total <span class="k">&middot; 5-day avg '+hm(avg[i])+'</span><br><span class="k">deep '+deep.toFixed(1)+'h &middot; core '+core.toFixed(1)+'h &middot; rem '+rem.toFixed(1)+'h</span>');});
     hit.addEventListener('mouseleave',tipHide);s.appendChild(hit);
-    x+=bw+gap;
   });
   return data[data.length-1].total;
 }

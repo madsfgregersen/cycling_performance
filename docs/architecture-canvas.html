@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cycling Performance — Architecture Canvas</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --ink:#1b1b18; --muted:#5f6570; --faint:#8b909a;
+    --card:#ffffff; --line:#e4e6ea; --line2:#d4d7dd;
+    --external:#64748b; --ingress:#2563eb; --ingestion:#0d9488;
+    --data:#b45309; --compute:#15803d; --coach:#7c3aed; --surface:#db2777;
+    --llm:#ea580c; --sacred:#a32d2d;
+    --chip:#f0f1f4;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#141518; --ink:#eceef1; --muted:#a4abb6; --faint:#7b828d;
+      --card:#1d1f24; --line:#2c2f36; --line2:#3a3e46; --chip:#26292f;
+      --external:#94a3b8; --ingress:#60a5fa; --ingestion:#2dd4bf;
+      --data:#f0a44a; --compute:#4ade80; --coach:#a78bfa; --surface:#f472b6;
+      --llm:#fb923c; --sacred:#f16a6a;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5;
+       -webkit-font-smoothing:antialiased;padding:28px 16px 60px}
+  .wrap{max-width:1080px;margin:0 auto}
+  h1{font-size:24px;letter-spacing:-.02em;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:14px;max-width:70ch}
+  .asof{display:inline-block;margin-top:10px;font-family:var(--mono);font-size:12px;
+        color:var(--muted);background:var(--chip);border:.5px solid var(--line);
+        border-radius:999px;padding:3px 11px}
+
+  /* legend */
+  .legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:22px 0 8px;padding:12px 14px;
+          background:var(--card);border:.5px solid var(--line);border-radius:12px}
+  .legend .grp{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:7px}
+  .sw{width:11px;height:11px;border-radius:3px;flex:0 0 auto}
+  .legend .arw{font-family:var(--mono);color:var(--ink)}
+
+  /* planes */
+  .plane{background:var(--card);border:.5px solid var(--line);border-left:4px solid var(--pc,#999);
+         border-radius:12px;padding:12px 15px 14px;margin:0}
+  .plabel{font-size:11px;text-transform:uppercase;letter-spacing:.07em;font-weight:700;
+          color:var(--pc,#666);margin-bottom:2px}
+  .pdesc{font-size:12px;color:var(--muted);margin-bottom:10px}
+  .row{display:flex;flex-wrap:wrap;gap:9px}
+  .box{background:var(--bg);border:.5px solid var(--line2);border-radius:9px;
+       padding:8px 11px;min-width:150px;flex:1 1 auto}
+  .box .t{font-weight:600;font-size:13px}
+  .box .m{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .box code,.pdesc code,.hp code,.foot code{font-family:var(--mono);font-size:11px;
+       background:var(--chip);padding:1px 4px;border-radius:4px}
+  .box.wide{flex-basis:100%}
+
+  .chev{display:flex;justify-content:center;align-items:center;gap:10px;
+        color:var(--faint);font-size:15px;padding:5px 0}
+  .chev .lab{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em}
+
+  /* bucket chips */
+  .buckets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+  @media(max-width:640px){.buckets{grid-template-columns:1fr 1fr}}
+  .bk{background:var(--bg);border:.5px solid var(--line2);border-radius:9px;padding:8px 10px;
+      position:relative}
+  .bk .n{font-family:var(--mono);font-size:10px;color:var(--data);font-weight:700}
+  .bk .t{font-weight:600;font-size:12.5px}
+  .bk .m{font-size:11px;color:var(--muted);margin-top:1px}
+  .bk.sacred{border-color:var(--sacred)}
+  .bk.sacred .n{color:var(--sacred)}
+  .tag{font-family:var(--mono);font-size:9.5px;color:var(--sacred);border:.5px solid var(--sacred);
+       border-radius:5px;padding:0 4px;margin-left:5px;vertical-align:1px}
+  .sub-tables{margin-top:10px;font-size:11.5px;color:var(--muted)}
+  .sub-tables b{color:var(--ink);font-weight:600}
+
+  /* coach split */
+  .coach-grid{display:grid;grid-template-columns:1fr 200px;gap:11px}
+  @media(max-width:720px){.coach-grid{grid-template-columns:1fr}}
+  .subhead{font-size:11px;font-weight:700;color:var(--muted);margin:2px 0 6px;
+           text-transform:uppercase;letter-spacing:.05em}
+  .branch{border-left:3px solid var(--coach)}
+  .proactive{border-left:3px solid var(--ingestion)}
+  .llmbox{background:var(--bg);border:.5px solid var(--llm);border-radius:9px;padding:9px 11px}
+  .llmbox .t{color:var(--llm);font-weight:700;font-size:13px}
+
+  /* decisions */
+  .decisions{display:flex;flex-wrap:wrap;gap:9px;margin-top:4px}
+  .callout{flex:1 1 300px;border:1px dashed var(--line2);border-radius:10px;padding:9px 12px;
+           background:var(--card)}
+  .callout .t{font-weight:700;font-size:12.5px}
+  .callout .t::before{content:"◆ ";color:var(--coach)}
+  .callout .m{font-size:11.5px;color:var(--muted);margin-top:2px}
+
+  /* hot paths */
+  .hp{background:var(--card);border:.5px solid var(--line);border-radius:12px;padding:12px 15px;margin-top:9px}
+  .hp .t{font-weight:700;font-size:13px;margin-bottom:8px}
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px}
+  .step{background:var(--bg);border:.5px solid var(--line2);border-radius:7px;padding:4px 9px}
+  .flow .a{color:var(--faint);font-family:var(--mono)}
+  .hp.ride .t{color:var(--ingestion)} .hp.health .t{color:var(--ingress)}
+
+  .section-h{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);
+             font-weight:700;margin:26px 0 10px}
+
+  footer{margin-top:30px;border-top:.5px solid var(--line);padding-top:16px;
+         font-size:12px;color:var(--muted)}
+  footer h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin:0 0 6px}
+  .chg{list-style:none;padding:0;margin:0 0 16px}
+  .chg li{padding:3px 0;border-bottom:.5px dotted var(--line)}
+  .chg .d{font-family:var(--mono);font-size:11px;color:var(--faint);margin-right:8px}
+  .srcs{font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.9}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Cycling Performance — Architecture Canvas</h1>
+  <div class="sub">A private, personal cycling-training app for one athlete building toward the Geo Park Gran Fondo (30 Aug 2026). Python/FastAPI + Postgres on Railway, with two surfaces (a web dashboard and a Telegram bot) over a shared backend, and an LLM-backed coach layered on top. Read top→bottom: data flows in from the left, is stored in six buckets, computed into readiness, interpreted by the coach, and delivered to the two surfaces.</div>
+  <div class="asof">As of 16 Jul 2026</div>
+
+  <!-- LEGEND -->
+  <div class="legend">
+    <span class="grp"><span class="sw" style="background:var(--external)"></span>External systems</span>
+    <span class="grp"><span class="sw" style="background:var(--ingress)"></span>Ingress / API</span>
+    <span class="grp"><span class="sw" style="background:var(--ingestion)"></span>Ingestion &amp; pushes</span>
+    <span class="grp"><span class="sw" style="background:var(--data)"></span>Data (6 buckets)</span>
+    <span class="grp"><span class="sw" style="background:var(--compute)"></span>Compute</span>
+    <span class="grp"><span class="sw" style="background:var(--coach)"></span>Coach brain</span>
+    <span class="grp"><span class="sw" style="background:var(--surface)"></span>Surfaces</span>
+    <span class="grp"><span class="sw" style="background:var(--llm)"></span>LLM (Claude)</span>
+    <span class="grp"><span class="tag">SACRED</span> computed-only, never written speculatively</span>
+    <span class="grp">◆ = key design decision (the learning layer)</span>
+  </div>
+
+  <!-- EXTERNAL -->
+  <div class="plane" style="--pc:var(--external)">
+    <div class="plabel">External systems</div>
+    <div class="pdesc">Everything the app talks to. Hosted on <b>Railway</b> (managed Postgres + secrets store); <b>Alembic</b> versions the schema at deploy time.</div>
+    <div class="row">
+      <div class="box"><div class="t">Strava</div><div class="m">Rides: OAuth + webhook (activity created/deleted) + bulk backfill pull.</div></div>
+      <div class="box"><div class="t">Apple Health → Health Auto Export</div><div class="m">Sleep, HRV, resting HR, wrist temp, respiratory rate. POSTs when phone foregrounds.</div></div>
+      <div class="box"><div class="t">Telegram</div><div class="m">Two-way: check-ins &amp; replies in, coach messages out (bot).</div></div>
+      <div class="box"><div class="t">Anthropic — Claude</div><div class="m">The only LLM. Powers every coach reasoning &amp; voice output.</div></div>
+    </div>
+  </div>
+
+  <div class="chev"><span class="lab">inbound</span> ▼</div>
+
+  <!-- INGRESS -->
+  <div class="plane" style="--pc:var(--ingress)">
+    <div class="plabel">Ingress — FastAPI (<code>main.py</code>)</div>
+    <div class="pdesc">Three inbound "hot" endpoints drive everything automatically; the rest are manual/setup or the dashboard's read/edit REST surface.</div>
+    <div class="row">
+      <div class="box"><div class="t"><code>POST /strava/webhook</code></div><div class="m">Ride landed → background task.</div></div>
+      <div class="box"><div class="t"><code>POST /health/ingest</code></div><div class="m">HAE payload (token-gated).</div></div>
+      <div class="box"><div class="t"><code>POST /telegram/webhook</code></div><div class="m">Athlete reply (secret-gated).</div></div>
+      <div class="box"><div class="t">Manual / setup</div><div class="m"><code>/strava/authorize</code>, <code>/backfill/rides?days=</code>, webhook subscribe.</div></div>
+      <div class="box"><div class="t">Dashboard REST</div><div class="m"><code>/dashboard/data</code>, <code>/planned-workouts</code>, <code>/coach/*</code>, <code>/plan/*</code>, <code>/brief/*</code>, <code>/llm/*</code>, <code>/logs</code>.</div></div>
+    </div>
+  </div>
+
+  <div class="chev"><span class="lab">parse &amp; store</span> ▼</div>
+
+  <!-- INGESTION -->
+  <div class="plane" style="--pc:var(--ingestion)">
+    <div class="plabel">Ingestion modules</div>
+    <div class="pdesc">Normalize inbound data and write it to the buckets. Deduping is source-specific.</div>
+    <div class="row">
+      <div class="box"><div class="t">strava_webhook + backfill</div><div class="m">Ride summary (bucket 1) + 1&nbsp;Hz streams (bucket 2). Dedup on activity id.</div></div>
+      <div class="box"><div class="t">health_ingest</div><div class="m">Raw Apple Health samples (bucket 3). Sleep dedups on <code>sleepStart</code>.</div></div>
+      <div class="box"><div class="t">telegram (inbound)</div><div class="m">Check-ins (bucket 4); routes replies to the coach / pending proposals.</div></div>
+    </div>
+  </div>
+
+  <div class="chev"><span class="lab">persist</span> ▼</div>
+
+  <!-- DATA -->
+  <div class="plane" style="--pc:var(--data)">
+    <div class="plabel">Data — the six buckets (<code>models.py</code>)</div>
+    <div class="pdesc">The locked "keep everything" storage model. Actual history and planned/provisional data never mix.</div>
+    <div class="buckets">
+      <div class="bk"><div class="n">1</div><div class="t">rides_summary</div><div class="m">One row per ride + ride TSS.</div></div>
+      <div class="bk"><div class="n">2</div><div class="t">ride_streams</div><div class="m">Second-by-second (1&nbsp;Hz) data.</div></div>
+      <div class="bk"><div class="n">3</div><div class="t">health_samples</div><div class="m">Raw Apple Health samples.</div></div>
+      <div class="bk"><div class="n">4</div><div class="t">telegram_checkins</div><div class="m">Subjective daily inputs.</div></div>
+      <div class="bk sacred"><div class="n">5</div><div class="t">daily_readiness <span class="tag">SACRED</span></div><div class="m">Computed CTL/ATL/TSB + verdict. Sole dashboard source.</div></div>
+      <div class="bk"><div class="n">6</div><div class="t">planned_workouts</div><div class="m">Future date + target TSS/zone/title. Provisional.</div></div>
+    </div>
+    <div class="sub-tables"><b>Supporting tables:</b> plan_constraints &amp; plan_adjustment_proposals · plan_blocks (7-week structure) · race_goal · messaging_settings · integration_log <i>(audit trail + the coach thread store)</i> · llm_usage + app_config <i>(cost log + active model)</i> · strava_tokens.</div>
+  </div>
+
+  <div class="chev"><span class="lab">compute on write &amp; on demand</span> ▼</div>
+
+  <!-- COMPUTE -->
+  <div class="plane" style="--pc:var(--compute)">
+    <div class="plabel">Compute</div>
+    <div class="pdesc">Turns raw data into the numbers the coach and dashboard speak in.</div>
+    <div class="row">
+      <div class="box"><div class="t">readiness.recompute</div><div class="m">Ride TSS → rolling CTL/ATL/TSB → green/amber/red verdict → bucket 5.</div></div>
+      <div class="box"><div class="t">ride_metrics</div><div class="m">Efficiency factor &amp; aerobic decoupling from streams.</div></div>
+      <div class="box"><div class="t">recovery_signals</div><div class="m">Overnight HRV/RHR/sleep deviations vs baseline. <code>canonical_nights</code> collapses HAE's per-night snapshots.</div></div>
+      <div class="box"><div class="t">forward projection</div><div class="m">CTL/ATL/TSB projected from bucket 6. Compute-on-demand; never written back.</div></div>
+    </div>
+  </div>
+
+  <div class="chev"><span class="lab">explain &amp; advise</span> ▼</div>
+
+  <!-- COACH -->
+  <div class="plane" style="--pc:var(--coach)">
+    <div class="plabel">Coach brain</div>
+    <div class="pdesc"><b>One coach brain, thin adapters.</b> <code>coach_conversation</code> orchestrates; every module shares one voice (<code>coach_voice</code>) and calls the LLM only through <code>ai_coach</code>.</div>
+    <div class="coach-grid">
+      <div>
+        <div class="box wide"><div class="t">coach_conversation — orchestrator</div><div class="m">Classifies each athlete message, routes to a branch, runs propose→confirm→write, logs the one shared thread, mirrors to Telegram.</div></div>
+
+        <div class="subhead" style="margin-top:11px">Reactive branches — intent classifier routes here (propose → confirm → write)</div>
+        <div class="row">
+          <div class="box branch"><div class="t">disruption</div><div class="m">coach_plan_adjust → planned_workouts. Owns the classifier + guardrail.</div></div>
+          <div class="box branch"><div class="t">plan_structure</div><div class="m">coach_plan_structure → plan_blocks (week descriptions).</div></div>
+          <div class="box branch"><div class="t">compile</div><div class="m">coach_plan_compile → planned_workouts. One-week cap, auto-advance.</div></div>
+          <div class="box branch"><div class="t">question</div><div class="m">coach_qa — read-only, answers from coach_context.</div></div>
+        </div>
+
+        <div class="subhead" style="margin-top:11px">Proactive voice (pushed on events; read-only, one-directional)</div>
+        <div class="row">
+          <div class="box proactive"><div class="t">morning verdict</div><div class="m">coach_morning</div></div>
+          <div class="box proactive"><div class="t">ride debrief</div><div class="m">coach_ride</div></div>
+          <div class="box proactive"><div class="t">missed workout</div><div class="m">coach_missed_workout</div></div>
+          <div class="box proactive"><div class="t">weekly summary</div><div class="m">coach_weekly_summary</div></div>
+          <div class="box proactive"><div class="t">constraint drift</div><div class="m">coach_constraint_drift</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="llmbox"><div class="t">ai_coach → Claude</div><div class="m" style="color:var(--muted);font-size:11.5px;margin-top:3px">The sole LLM caller. Fail-safe. Reads active model from app_config; logs every call's tokens + cost to <b>llm_usage</b>.</div></div>
+        <div class="box" style="margin-top:9px"><div class="t">coach_context</div><div class="m">Broad read model shared by Q&amp;A + previews (no LLM, no writes).</div></div>
+        <div class="box" style="margin-top:9px"><div class="t">coach_voice</div><div class="m">One shared system prompt — short, data-driven voice, reused everywhere.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="chev"><span class="lab">deliver</span> ▼</div>
+
+  <!-- SURFACES -->
+  <div class="plane" style="--pc:var(--surface)">
+    <div class="plabel">Surfaces — two thin windows onto one coach thread</div>
+    <div class="pdesc">Same backend, same conversation. A message sent from either surface is visible on both.</div>
+    <div class="row">
+      <div class="box" style="flex-basis:100%"><div class="t">Dashboard SPA — <code>static/dashboard.html</code></div><div class="m"><b>Now</b> (verdict, load chart, recovery tiles) · <b>Plan</b> (calendar, projection, docked coach) · <b>Plan brief</b> (goal, constraints, full coach thread) · <b>Messaging</b> (push toggles) · <b>Logs</b> (LLM cost monitor + model switcher + event log).</div></div>
+      <div class="box"><div class="t">Telegram</div><div class="m">Input + nudge: morning verdict &amp; check-in out, replies in. Dashboard messages echo here as native blockquotes.</div></div>
+    </div>
+  </div>
+
+  <!-- HOT PATHS -->
+  <div class="section-h">Request hot-paths (the two automatic cascades)</div>
+  <div class="hp ride">
+    <div class="t">🚴 Ride landed</div>
+    <div class="flow">
+      <span class="step">Strava webhook</span><span class="a">→</span>
+      <span class="step">backfill.ingest_single_activity</span><span class="a">→</span>
+      <span class="step">buckets 1 + 2</span><span class="a">→</span>
+      <span class="step">readiness.recompute</span><span class="a">→</span>
+      <span class="step">bucket 5</span><span class="a">→</span>
+      <span class="step">telegram post-ride debrief + feel ask</span><span class="a">→</span>
+      <span class="step">coach_ride → Claude</span>
+    </div>
+  </div>
+  <div class="hp health">
+    <div class="t">🌙 Health data arrived</div>
+    <div class="flow">
+      <span class="step">/health/ingest</span><span class="a">→</span>
+      <span class="step">health_ingest</span><span class="a">→</span>
+      <span class="step">bucket 3</span><span class="a">→</span>
+      <span class="step">readiness.recompute → bucket 5</span><span class="a">→</span>
+      <span class="step">morning verdict</span><span class="a">+</span>
+      <span class="step">missed / weekly / drift</span><span class="a">→</span>
+      <span class="step">coach_* → Claude</span>
+    </div>
+  </div>
+
+  <!-- DECISIONS -->
+  <div class="section-h">Key design decisions — the learning layer</div>
+  <div class="decisions">
+    <div class="callout"><div class="t">Sacred separation</div><div class="m">Actual history (bucket 5, computed-only) and planned/provisional data (bucket 6) never mix — in data <i>or</i> in the coach's prose. The coach explains the verdict; it never re-derives it.</div></div>
+    <div class="callout"><div class="t">Propose → confirm → write</div><div class="m">Any coach action that changes the calendar proposes first, waits for an explicit yes, then writes. Guardrails (taper/event date) are enforced in code twice — at propose and at apply — never left to the prompt.</div></div>
+    <div class="callout"><div class="t">One coach brain, thin adapters</div><div class="m">Dashboard and Telegram are two I/O adapters onto one orchestrator + one shared voice. The LLM is reached only through <code>ai_coach</code>, which fails safe and logs cost.</div></div>
+    <div class="callout"><div class="t">Compute-on-demand projection</div><div class="m">The forward CTL/ATL/TSB curve is computed from planned workouts when asked — never written back to the sacred readiness bucket.</div></div>
+    <div class="callout"><div class="t">Event-driven fan-outs</div><div class="m">Two webhooks + one authed POST drive everything; each proactive push dedupes on its own key, so re-arriving data the same day is a no-op.</div></div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <h3>How to update this canvas</h3>
+    <p style="margin:0 0 16px">Ask: <i>"update the architecture canvas."</i> The refresh re-scans what changed since the "As of" date, edits this same file in place, bumps the stamp, and adds a changelog line below. This file is the canonical architecture reference — same path every time.</p>
+
+    <h3>Changelog</h3>
+    <ul class="chg">
+      <li><span class="d">2026-07-16</span>Initial canvas — full snapshot: six buckets + supporting tables, ingestion, compute, the coach brain (4 reactive branches + 5 proactive modules), both surfaces, and the two hot-paths.</li>
+    </ul>
+
+    <h3>Reflects these source files</h3>
+    <div class="srcs">
+      backend/app/main.py · models.py · database.py<br>
+      strava.py · strava_webhook.py · backfill.py · health_ingest.py · telegram.py<br>
+      readiness.py · ride_metrics.py · recovery_signals.py · dashboard.py<br>
+      ai_coach.py · coach_voice.py · coach_context.py · coach_conversation.py<br>
+      coach_plan_adjust.py · coach_plan_structure.py · coach_plan_compile.py · coach_qa.py<br>
+      coach_morning.py · coach_ride.py · coach_missed_workout.py · coach_weekly_summary.py · coach_constraint_drift.py<br>
+      llm_pricing.py · llm_usage.py · plan_blocks.py · plan_constraints.py · planned_workouts.py · race_goal.py<br>
+      static/dashboard.html · docs/architecture.md · docs/coach-brief.md
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -120,6 +120,30 @@ def readiness_recompute(db: Session = Depends(get_db)):
     return readiness.recompute(db)
 
 
+@app.get("/debug/sleep")
+def debug_sleep(db: Session = Depends(get_db)):
+    # TEMP diagnostic (sleep-data bug): dump the raw stored sleep_analysis
+    # rows so we can see HAE's real payload shape. Read-only.
+    from .models import HealthSample
+
+    rows = (
+        db.query(HealthSample)
+        .filter(HealthSample.metric_name == "sleep_analysis")
+        .order_by(HealthSample.timestamp.desc())
+        .limit(12)
+        .all()
+    )
+    return [
+        {
+            "timestamp": r.timestamp.isoformat() if r.timestamp else None,
+            "value": r.value,
+            "source": r.source,
+            "raw_payload": r.raw_payload,
+        }
+        for r in rows
+    ]
+
+
 @app.post("/health/ingest")
 async def ingest_health_data(
     request: Request, token: str = "", db: Session = Depends(get_db)

@@ -252,9 +252,9 @@ textarea{resize:vertical;line-height:1.45}
     </div>
     <div class="card">
       <div class="tilehd"><span class="lbl">Sleep</span><span class="big" id="sleep-latest" style="font-size:21px">&mdash;</span></div>
-      <svg id="sleep" viewBox="0 0 300 118" aria-label="Nightly sleep by stage (deep, core, rem) with total, over the last 14 nights"></svg>
+      <svg id="sleep" viewBox="0 0 300 118" aria-label="Nightly sleep stages (deep, core, rem) stacked, over the last 14 nights"></svg>
       <div id="sleep-empty" class="empty" style="display:none">No sleep data yet</div>
-      <div class="cap"><span style="display:inline-block;width:9px;height:9px;border:1px solid var(--line2);border-radius:2px;vertical-align:-1px"></span> total &middot; <span style="display:inline-block;width:12px;height:2px;background:#534AB7;vertical-align:3px"></span> deep &middot; <span style="display:inline-block;width:12px;height:2px;background:#3E7CB1;vertical-align:3px"></span> core &middot; <span style="display:inline-block;width:12px;height:2px;background:#B0700F;vertical-align:3px"></span> rem</div>
+      <div class="cap"><span style="display:inline-block;width:9px;height:9px;border:1.25px solid #534AB7;border-radius:2px;vertical-align:-1px"></span> deep &middot; <span style="display:inline-block;width:9px;height:9px;border:1.25px solid #3E7CB1;border-radius:2px;vertical-align:-1px"></span> core &middot; <span style="display:inline-block;width:9px;height:9px;border:1.25px solid #B0700F;border-radius:2px;vertical-align:-1px"></span> rem</div>
     </div>
   </div>
 
@@ -540,27 +540,18 @@ function sleepTile(id, nights){
     s.appendChild(txt(padL-6,y+3,h+'h','var(--faint)',10,'end',true));});
   var n=data.length,gap=6,bw=(d.w-padL-padR-gap*(n-1))/n,x=padL;
   function hm(v){var h=Math.floor(v),m=Math.round((v-h)*60);if(m===60){h++;m=0;}return h+':'+(m<10?'0':'')+m;}
-  // per-night stage values; core falls back to total minus deep+rem
-  var stage=data.map(function(nt){var deep=nt.deep||0,rem=nt.rem||0;return {deep:deep,rem:rem,core:(nt.core!=null?nt.core:(nt.total-deep-rem))};});
-  var centers=[];
-  // outlined bars = nightly total (neutral, so the coloured stage lines read over them)
+  function ph(h){return Y(0)-Y(h);} // pixel height for h hours
+  // stacked stage blocks, no fill, coloured edges: rem (top), core, deep (bottom)
   data.forEach(function(night,i){
-    s.appendChild(E('rect',{x:x,y:Y(night.total),width:bw,height:base-Y(night.total),fill:'none',stroke:'var(--line2)','stroke-width':1,rx:2}));
-    centers.push(x+bw/2);
-    x+=bw+gap;
-  });
-  // three raw nightly stage lines, distinct palette colours
-  function stageLine(key,color){
-    s.appendChild(E('polyline',{points:stage.map(function(v,i){return centers[i].toFixed(1)+','+Y(v[key]).toFixed(1);}).join(' '),fill:'none',stroke:color,'stroke-width':1.75,'stroke-linejoin':'round','stroke-linecap':'round'}));
-    s.appendChild(E('circle',{cx:centers[n-1],cy:Y(stage[n-1][key]),r:2.6,fill:color}));
-  }
-  stageLine('deep','#534AB7'); stageLine('core','#3E7CB1'); stageLine('rem','#B0700F');
-  // hover hit zones (on top so they catch the mouse everywhere)
-  data.forEach(function(night,i){
-    var v=stage[i];
-    var hit=E('rect',{x:centers[i]-bw/2,y:padT,width:bw,height:base-padT,fill:'transparent'});hit.style.cursor='crosshair';
-    hit.addEventListener('mousemove',function(ev){tipShow(ev,'<span class="k">'+night.date+'</span><br><b>'+hm(night.total)+'</b> total<br><span class="k">deep '+v.deep.toFixed(1)+'h &middot; core '+v.core.toFixed(1)+'h &middot; rem '+v.rem.toFixed(1)+'h</span>');});
+    var deep=night.deep||0, rem=night.rem||0, core=(night.core!=null?night.core:(night.total-deep-rem));
+    var yTop=Y(night.total), remH=ph(rem), coreH=ph(core);
+    s.appendChild(E('rect',{x:x,y:yTop,width:bw,height:remH,fill:'none',stroke:'#B0700F','stroke-width':1.25,rx:2}));
+    s.appendChild(E('rect',{x:x,y:yTop+remH,width:bw,height:coreH,fill:'none',stroke:'#3E7CB1','stroke-width':1.25}));
+    s.appendChild(E('rect',{x:x,y:yTop+remH+coreH,width:bw,height:ph(deep),fill:'none',stroke:'#534AB7','stroke-width':1.25}));
+    var hit=E('rect',{x:x,y:padT,width:bw,height:base-padT,fill:'transparent'});hit.style.cursor='crosshair';
+    hit.addEventListener('mousemove',function(ev){tipShow(ev,'<span class="k">'+night.date+'</span><br><b>'+hm(night.total)+'</b> total<br><span class="k">deep '+deep.toFixed(1)+'h &middot; core '+core.toFixed(1)+'h &middot; rem '+rem.toFixed(1)+'h</span>');});
     hit.addEventListener('mouseleave',tipHide);s.appendChild(hit);
+    x+=bw+gap;
   });
   return data[data.length-1].total;
 }

@@ -178,7 +178,9 @@ def send_post_ride_debrief(db: Session, ride) -> dict:
     parts = []
     explanation = None
     if debrief_enabled:
-        explanation = coach_ride.explain_ride(db, ride)
+        # Reuse the cached brief (written on ride-landed) so we don't make a
+        # second LLM call; computes+caches on the fly if not already cached.
+        explanation = coach_ride.cache_ride_brief(db, ride)
         if explanation:
             part = f"{explanation['headline']}\n\n{explanation['why']}"
             if explanation.get("note"):

@@ -2,7 +2,7 @@ import os
 
 import httpx
 
-from . import backfill, readiness, telegram
+from . import backfill, coach_ride, readiness, telegram
 from .activity_log import log_event
 from .database import SessionLocal
 from .models import RideSummary
@@ -69,6 +69,10 @@ def process_event(event: dict) -> None:
             # debrief sees it rather than a null.
             ride = db.query(RideSummary).filter(RideSummary.id == new_ride_id).first()
             if ride is not None:
+                # Cache the debrief for the dashboard calendar tile first, so
+                # it exists even if the Telegram debrief is turned off. The
+                # sender below reuses this cache (no second LLM call).
+                coach_ride.cache_ride_brief(db, ride)
                 telegram.send_post_ride_debrief(db, ride)
     finally:
         db.close()

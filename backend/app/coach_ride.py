@@ -5,8 +5,9 @@ from datetime import timezone as dt_timezone
 from sqlalchemy.orm import Session
 
 from . import ai_coach, ride_metrics
+from .activity_log import log_event
 from .coach_voice import COACH_SYSTEM_PROMPT
-from .models import PlannedWorkout
+from .models import IntegrationLog, PlannedWorkout, TelegramCheckin
 
 LOCAL_TZ = dt_timezone(timedelta(hours=9))
 
@@ -66,3 +67,69 @@ def explain_ride(db: Session, ride) -> dict:
         "-- say so rather than inventing a purpose for it."
     )
     return ai_coach.ask_claude_structured(prompt, COACH_SYSTEM_PROMPT, RIDE_DEBRIEF_SCHEMA, category="ride_debrief")
+
+
+def _brief_marker(ride) -> str:
+    # Trailing " |" delimiter so a LIKE lookup can't collide (1001 vs 10011).
+    return f"strava_activity_id={ride.strava_activity_id}"
+
+
+def get_cached_ride_brief(db: Session, ride):
+    """The cached post-ride debrief (headline/why/note) for this ride, or
+    None if none has been generated. No LLM call."""
+    row = (
+        db.query(IntegrationLog)
+        .filter(
+            IntegrationLog.source == "coach",
+            IntegrationLog.event == "ride_brief",
+            IntegrationLog.summary.like(_brief_marker(ride) + " |%"),
+        )
+        .order_by(IntegrationLog.created_at.desc())
+        .first()
+    )
+    if row is None:
+        return None
+    try:
+        return json.loads(row.summary.split(" | ", 1)[1])
+    except (ValueError, IndexError):
+        return None
+
+
+def cache_ride_brief(db: Session, ride):
+    """Compute the debrief once and cache it as an IntegrationLog row (like
+    the morning brief -- no new table). Idempotent per ride, so it's safe to
+    call from the ride-landed flow regardless of Telegram settings, and again
+    from the debrief sender without a second LLM call. Returns the dict, or
+    None if the coach isn't configured."""
+    existing = get_cached_ride_brief(db, ride)
+    if existing is not None:
+        return existing
+    explanation = explain_ride(db, ride)
+    if not explanation:
+        return None
+    log_event(
+        db,
+        "coach",
+        "ride_brief",
+        _brief_marker(ride)
+        + " | "
+        + json.dumps(
+            {
+                "headline": explanation.get("headline", ""),
+                "why": explanation.get("why", ""),
+                "note": explanation.get("note", ""),
+            }
+        ),
+    )
+    return explanation
+
+
+def ride_feel_reply(db: Session, ride):
+    """The athlete's RPE/feel reply tied to this ride (story 4), or None."""
+    row = (
+        db.query(TelegramCheckin)
+        .filter(TelegramCheckin.ride_id == ride.id)
+        .order_by(TelegramCheckin.created_at.desc())
+        .first()
+    )
+    return row.raw_message if row and row.raw_message else None

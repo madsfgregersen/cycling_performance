@@ -977,26 +977,54 @@ function loadPlan(){
 /* read-only detail for a recorded (actual) ride day; planned context if any */
 function fmtMoving(m){ if(m==null)return '—'; var h=Math.floor(m/60), mm=m%60; return h>0?(h+'h '+(mm<10?'0':'')+mm+'m'):(mm+'m'); }
 function rideRow(label,val){ return '<div style="display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:5px 0;border-top:.5px solid var(--line)"><span style="color:var(--muted)">'+label+'</span><span style="font-family:var(--mono)">'+val+'</span></div>'; }
+function rideStatsHtml(rd, multi){
+  var html = multi ? ('<div style="font-weight:600;font-size:13px;margin-top:10px">'+escapeHtml(rd.name||'Ride')+'</div>') : '';
+  html+=rideRow('TSS', rd.tss!=null?Math.round(rd.tss):'—');
+  html+=rideRow('Distance', rd.distance_km!=null?rd.distance_km+' km':'—');
+  html+=rideRow('Moving time', fmtMoving(rd.moving_minutes));
+  html+=rideRow('Avg / norm power', (rd.average_watts?Math.round(rd.average_watts):'—')+' / '+(rd.weighted_avg_watts?Math.round(rd.weighted_avg_watts):'—')+' W');
+  html+=rideRow('Avg / max HR', (rd.average_heartrate?Math.round(rd.average_heartrate):'—')+' / '+(rd.max_heartrate?Math.round(rd.max_heartrate):'—')+' bpm');
+  html+=rideRow('Elevation', rd.elevation_gain_m!=null?Math.round(rd.elevation_gain_m)+' m':'—');
+  return html;
+}
+function coachEvalHtml(det){
+  if(!det || (!det.coach && !det.feel)) return '';
+  var h='<div style="margin-top:12px;padding:11px 12px;border:.5px solid var(--line);border-left:3px solid var(--violet);border-radius:9px;background:#fff">'
+    +'<div style="font-weight:600;font-size:12px;color:var(--violet);margin-bottom:5px">&#10022; Coach</div>';
+  if(det.coach){
+    h+='<div style="font-size:13px;line-height:1.5"><b>'+escapeHtml(det.coach.headline||'')+'</b> '+escapeHtml(det.coach.why||'');
+    if(det.coach.note) h+=' <span style="color:var(--muted)">'+escapeHtml(det.coach.note)+'</span>';
+    h+='</div>';
+  }
+  if(det.feel){
+    h+='<div style="margin-top:8px;font-size:12.5px;color:var(--muted)"><b style="color:var(--ink)">Your feel:</b> &ldquo;'+escapeHtml(det.feel)+'&rdquo;</div>';
+  }
+  h+='</div>';
+  return h;
+}
 function openRideDetail(rides, planned){
   var multi=rides.length>1;
   document.getElementById('ride-modal-title').innerHTML='&#10003; '+escapeHtml(multi?(rides.length+' recorded rides'):(rides[0].name||'Recorded ride'));
   document.getElementById('ride-modal-date').textContent=fmtDayMonth(rides[0].date);
-  var html='';
-  rides.forEach(function(rd){
-    if(multi) html+='<div style="font-weight:600;font-size:13px;margin-top:10px">'+escapeHtml(rd.name||'Ride')+'</div>';
-    html+=rideRow('TSS', rd.tss!=null?Math.round(rd.tss):'—');
-    html+=rideRow('Distance', rd.distance_km!=null?rd.distance_km+' km':'—');
-    html+=rideRow('Moving time', fmtMoving(rd.moving_minutes));
-    html+=rideRow('Avg / norm power', (rd.average_watts?Math.round(rd.average_watts):'—')+' / '+(rd.weighted_avg_watts?Math.round(rd.weighted_avg_watts):'—')+' W');
-    html+=rideRow('Avg / max HR', (rd.average_heartrate?Math.round(rd.average_heartrate):'—')+' / '+(rd.max_heartrate?Math.round(rd.max_heartrate):'—')+' bpm');
-    html+=rideRow('Elevation', rd.elevation_gain_m!=null?Math.round(rd.elevation_gain_m)+' m':'—');
-  });
+  var body=document.getElementById('ride-modal-body');
+  body.innerHTML='<div class="cap" style="padding:8px 0">Loading&hellip;</div>';
+  document.getElementById('ride-modal').classList.add('on');
+  var plannedHtml='';
   if(planned && planned.length){
     var notes=planned.map(function(p){return p.notes;}).filter(Boolean).join(' · ');
-    html+='<div style="margin-top:12px;padding-top:9px;border-top:.5px solid var(--line);font-size:12.5px;color:var(--muted)"><b style="color:var(--ink)">Planned that day:</b> '+Math.round(sumField(planned,'target_tss'))+' TSS'+(notes?(' &middot; '+escapeHtml(notes)):'')+'</div>';
+    plannedHtml='<div style="margin-top:12px;padding-top:9px;border-top:.5px solid var(--line);font-size:12.5px;color:var(--muted)"><b style="color:var(--ink)">Planned that day:</b> '+Math.round(sumField(planned,'target_tss'))+' TSS'+(notes?(' &middot; '+escapeHtml(notes)):'')+'</div>';
   }
-  document.getElementById('ride-modal-body').innerHTML=html;
-  document.getElementById('ride-modal').classList.add('on');
+  Promise.all(rides.map(function(rd){
+    return fetch('/rides/'+rd.strava_activity_id).then(function(r){return r.json();}).catch(function(){return {};});
+  })).then(function(details){
+    var html='';
+    rides.forEach(function(rd,idx){
+      html+=rideStatsHtml(rd, multi);
+      html+=coachEvalHtml(details[idx]);
+    });
+    html+=plannedHtml;
+    body.innerHTML=html;
+  });
 }
 function closeRideModal(){ document.getElementById('ride-modal').classList.remove('on'); }
 

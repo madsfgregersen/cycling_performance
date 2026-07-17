@@ -245,6 +245,23 @@ def list_rides_range(days: int = 180, db: Session = Depends(get_db)):
     return out
 
 
+@app.get("/rides/{strava_activity_id}")
+def ride_detail(strava_activity_id: int, db: Session = Depends(get_db)):
+    """Cached coach debrief + the athlete's RPE/feel reply for one ride, for
+    the calendar tile's detail view. No live LLM call (reads the cache)."""
+    ride = (
+        db.query(RideSummary)
+        .filter(RideSummary.strava_activity_id == strava_activity_id)
+        .first()
+    )
+    if ride is None:
+        raise HTTPException(status_code=404, detail="not found")
+    return {
+        "coach": coach_ride.get_cached_ride_brief(db, ride),
+        "feel": coach_ride.ride_feel_reply(db, ride),
+    }
+
+
 @app.get("/planned-workouts")
 def list_planned_workouts(db: Session = Depends(get_db)):
     return planned_workouts.list_workouts(db)

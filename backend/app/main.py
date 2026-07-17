@@ -214,6 +214,37 @@ def rides_recent(limit: int = 10, db: Session = Depends(get_db)):
     ]
 
 
+@app.get("/rides")
+def list_rides_range(days: int = 180, db: Session = Depends(get_db)):
+    """Recorded rides (Bucket 1) with actual TSS + headline stats, for the
+    Plan calendar. Local ride date is derived per row; a 1-day datetime
+    buffer keeps timezone conversion from dropping edge rides."""
+    days = max(1, min(days, 730))
+    cutoff = datetime.now(dashboard.LOCAL_TZ) - timedelta(days=days + 1)
+    rows = (
+        db.query(RideSummary)
+        .filter(RideSummary.start_date >= cutoff)
+        .order_by(RideSummary.start_date)
+        .all()
+    )
+    out = []
+    for r in rows:
+        out.append({
+            "strava_activity_id": r.strava_activity_id,
+            "date": r.start_date.astimezone(dashboard.LOCAL_TZ).date().isoformat(),
+            "name": r.name,
+            "tss": round(r.ride_tss, 1) if r.ride_tss is not None else None,
+            "distance_km": round(r.distance_m / 1000, 1) if r.distance_m else None,
+            "moving_minutes": round(r.moving_time_s / 60) if r.moving_time_s else None,
+            "elevation_gain_m": r.elevation_gain_m,
+            "average_watts": r.average_watts,
+            "weighted_avg_watts": r.weighted_avg_watts,
+            "average_heartrate": r.average_heartrate,
+            "max_heartrate": r.max_heartrate,
+        })
+    return out
+
+
 @app.get("/planned-workouts")
 def list_planned_workouts(db: Session = Depends(get_db)):
     return planned_workouts.list_workouts(db)

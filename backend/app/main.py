@@ -245,6 +245,29 @@ def list_rides_range(days: int = 180, db: Session = Depends(get_db)):
     return out
 
 
+@app.get("/rides/backfill-briefs")
+def backfill_ride_briefs(days: int = 14, db: Session = Depends(get_db)):
+    """One-off, idempotent: cache the coach debrief for recent rides that
+    don't have one yet (e.g. rides recorded before ride-brief caching
+    shipped). Does NOT send Telegram. Safe to call repeatedly."""
+    days = max(1, min(days, 90))
+    cutoff = datetime.now(dashboard.LOCAL_TZ) - timedelta(days=days + 1)
+    rides = (
+        db.query(RideSummary)
+        .filter(RideSummary.start_date >= cutoff)
+        .order_by(RideSummary.start_date)
+        .all()
+    )
+    cached, already_had, failed = [], [], []
+    for r in rides:
+        if coach_ride.get_cached_ride_brief(db, r) is not None:
+            already_had.append(r.strava_activity_id)
+            continue
+        brief = coach_ride.cache_ride_brief(db, r)
+        (cached if brief else failed).append(r.strava_activity_id)
+    return {"cached": cached, "already_had": already_had, "failed": failed}
+
+
 @app.get("/rides/{strava_activity_id}")
 def ride_detail(strava_activity_id: int, db: Session = Depends(get_db)):
     """Cached coach debrief + the athlete's RPE/feel reply for one ride, for

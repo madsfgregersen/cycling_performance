@@ -280,7 +280,7 @@ def ride_detail(strava_activity_id: int, db: Session = Depends(get_db)):
     if ride is None:
         raise HTTPException(status_code=404, detail="not found")
     return {
-        "coach": coach_ride.get_cached_ride_brief(db, ride),
+        "coach": coach_ride.ride_evaluation(db, ride),
         "feel": coach_ride.ride_feel_reply(db, ride),
     }
 

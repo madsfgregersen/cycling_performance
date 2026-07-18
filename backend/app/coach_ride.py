@@ -133,3 +133,35 @@ def ride_feel_reply(db: Session, ride):
         .first()
     )
     return row.raw_message if row and row.raw_message else None
+
+
+def _evaluation_from_sent_debrief(db: Session, ride):
+    """Fallback for rides whose debrief was sent before structured ride_brief
+    caching existed: recover the coach's evaluation from the Telegram debrief
+    that was logged. The sent message is
+    '{headline}\\n\\n{why}\\n\\n[{note}]\\n\\n[{feel-ask}]', so the evaluation
+    -- the coach's interpretation of the ride -- is the 2nd paragraph."""
+    row = (
+        db.query(IntegrationLog)
+        .filter(
+            IntegrationLog.source == "telegram",
+            IntegrationLog.event == "ride_debrief_sent",
+            IntegrationLog.summary.like(f"ride_id={ride.id} |%"),
+        )
+        .order_by(IntegrationLog.created_at.desc())
+        .first()
+    )
+    if row is None:
+        return None
+    text = row.summary.split(" | ", 1)[1] if " | " in row.summary else row.summary
+    paras = [p.strip() for p in text.split("\n\n") if p.strip()]
+    if len(paras) < 2:
+        return None
+    return {"headline": paras[0], "why": paras[1], "note": ""}
+
+
+def ride_evaluation(db: Session, ride):
+    """The coach's evaluation for a ride's calendar tile: the structured cache
+    if present, otherwise recovered from the debrief that was already sent.
+    None if neither exists."""
+    return get_cached_ride_brief(db, ride) or _evaluation_from_sent_debrief(db, ride)

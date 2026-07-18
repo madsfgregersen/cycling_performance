@@ -988,15 +988,15 @@ function rideStatsHtml(rd, multi){
   return html;
 }
 function coachEvalHtml(det){
-  if(!det || (!det.coach && !det.feel)) return '';
+  var evalText = det && det.coach && det.coach.why;
+  var feel = det && det.feel;
+  if(!evalText && !feel) return '';
   var h='<div style="margin-top:12px;padding:11px 12px;border:.5px solid var(--line);border-left:3px solid var(--violet);border-radius:9px;background:#fff">'
     +'<div style="font-weight:600;font-size:12px;color:var(--violet);margin-bottom:5px">&#10022; Coach</div>';
-  if(det.coach){
-    h+='<div style="font-size:13px;line-height:1.5"><b>'+escapeHtml(det.coach.headline||'')+'</b> '+escapeHtml(det.coach.why||'');
-    if(det.coach.note) h+=' <span style="color:var(--muted)">'+escapeHtml(det.coach.note)+'</span>';
-    h+='</div>';
+  if(evalText){
+    h+='<div style="font-size:13px;line-height:1.5">'+escapeHtml(det.coach.why)+'</div>';
   }
-  if(det.feel){
+  if(feel){
     h+='<div style="margin-top:8px;font-size:12.5px;color:var(--muted)"><b style="color:var(--ink)">Your feel:</b> &ldquo;'+escapeHtml(det.feel)+'&rdquo;</div>';
   }
   h+='</div>';

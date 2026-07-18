@@ -1161,6 +1161,11 @@ function fmtThreadTime(iso){
 function renderThread(entries, rowsId, emptyId){
   var container=document.getElementById(rowsId);
   if(!container) return;
+  // Preserve the reader's scroll position across the 4s background re-render:
+  // only snap to the bottom if they were already there (following along), so
+  // scrolling up to read history isn't yanked back down.
+  var prevScrollTop=container.scrollTop;
+  var atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 40;
   container.innerHTML='';
   var emptyEl=document.getElementById(emptyId);
   if(emptyEl) emptyEl.style.display = entries.length===0 ? 'block' : 'none';
@@ -1204,7 +1209,7 @@ function renderThread(entries, rowsId, emptyId){
     row.appendChild(bubble);
     container.appendChild(row);
   });
-  container.scrollTop=container.scrollHeight;
+  container.scrollTop = atBottom ? container.scrollHeight : prevScrollTop;
 }
 
 var PLAN_THREAD_TAIL=8;

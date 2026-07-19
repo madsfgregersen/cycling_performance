@@ -8,7 +8,7 @@ from . import readiness, recovery_signals
 from .models import DailyReadiness, HealthSample, IntegrationLog
 
 # Personal single-user app; all recorded samples are in this timezone.
-LOCAL_TZ = dt_timezone(timedelta(hours=9))
+from .localtime import LOCAL_TZ
 
 # Widest history the Training-load chart's range selector can show (360d
 # back). The client slices this down to the chosen range.

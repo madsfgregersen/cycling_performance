@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from .models import HealthSample
 
 # Personal single-user app; matches the local timezone used elsewhere.
-LOCAL_TZ = dt_timezone(timedelta(hours=9))
+from .localtime import LOCAL_TZ
 
 BASELINE_NIGHTS = 30
 

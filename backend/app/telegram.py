@@ -36,7 +36,7 @@ API_BASE = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 # Personal single-user app; matches the local timezone used elsewhere
 # (dashboard.py) for bucketing events into calendar days.
-LOCAL_TZ = dt_timezone(timedelta(hours=9))
+from .localtime import LOCAL_TZ
 
 
 def send_message(text: str, parse_mode=None) -> bool:

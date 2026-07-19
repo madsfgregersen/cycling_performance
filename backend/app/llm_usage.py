@@ -19,7 +19,7 @@ from .models import AppConfig, LlmUsage
 _logger = logging.getLogger(__name__)
 
 # Match the +9 local day the rest of the app buckets on (see coach_plan_adjust).
-LOCAL_TZ = dt_timezone(timedelta(hours=9))
+from .localtime import LOCAL_TZ
 
 _ACTIVE_MODEL_KEY = "active_model"
 

@@ -8,7 +8,7 @@ from . import ai_coach, plan_blocks, plan_constraints, race_goal
 from .coach_voice import COACH_SYSTEM_PROMPT
 from .models import DailyReadiness, PlannedWorkout, RideSummary
 
-LOCAL_TZ = dt_timezone(timedelta(hours=9))
+from .localtime import LOCAL_TZ
 RECENT_RIDE_DAYS = 7
 
 INTENT_SCHEMA = {

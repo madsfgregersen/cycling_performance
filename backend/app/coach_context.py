@@ -8,7 +8,7 @@ from .models import DailyReadiness, HealthSample, PlannedWorkout, RideSummary, T
 
 # Personal single-user app; matches the local timezone used elsewhere
 # (dashboard.py, telegram.py) for bucketing events into calendar days.
-LOCAL_TZ = dt_timezone(timedelta(hours=9))
+from .localtime import LOCAL_TZ
 
 READINESS_TREND_DAYS = 14
 RECENT_RIDES = 5

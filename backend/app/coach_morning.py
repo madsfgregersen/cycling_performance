@@ -8,7 +8,7 @@ from . import ai_coach, plan_blocks, race_goal, recovery_signals
 from .coach_voice import COACH_SYSTEM_PROMPT
 from .models import DailyReadiness, PlannedWorkout, RideSummary, TelegramCheckin
 
-LOCAL_TZ = dt_timezone(timedelta(hours=9))
+from .localtime import LOCAL_TZ
 
 RECENT_RIDE_DAYS = 3
 RAMP_WINDOW_DAYS = 7

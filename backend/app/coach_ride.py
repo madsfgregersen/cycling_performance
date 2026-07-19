@@ -9,7 +9,7 @@ from .activity_log import log_event
 from .coach_voice import COACH_SYSTEM_PROMPT
 from .models import IntegrationLog, PlannedWorkout, TelegramCheckin
 
-LOCAL_TZ = dt_timezone(timedelta(hours=9))
+from .localtime import LOCAL_TZ
 
 RIDE_DEBRIEF_SCHEMA = {
     "type": "object",

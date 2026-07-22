@@ -32,6 +32,12 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
 TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "").strip()
 
+# Earliest local hour the morning verdict may fire. The verdict rides the
+# first health-sync of the day; without this gate a middle-of-the-night sync
+# (e.g. 01:16, only a pre-midnight nap recorded) would send it early with
+# incomplete sleep. Configurable via env.
+MORNING_EARLIEST_HOUR = int((os.environ.get("MORNING_EARLIEST_HOUR", "5").strip() or "5"))
+
 API_BASE = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 # Personal single-user app; matches the local timezone used elsewhere
@@ -90,9 +96,15 @@ def _already_sent_today(db: Session) -> bool:
     return recent.created_at.astimezone(LOCAL_TZ).date() == today_local
 
 
-def send_morning_verdict(db: Session) -> dict:
+def send_morning_verdict(db: Session, force: bool = False) -> dict:
     if not messaging_settings.is_enabled(db, "morning_verdict"):
         return {"sent": False, "reason": "disabled in messaging settings"}
+
+    # Don't fire mid-night: the first health-sync of the day can land at e.g.
+    # 01:16 with only a pre-midnight nap recorded. Wait until morning so the
+    # night's sleep is complete. force=True lets the manual test endpoint bypass.
+    if not force and datetime.now(LOCAL_TZ).hour < MORNING_EARLIEST_HOUR:
+        return {"sent": False, "reason": "before morning hour"}
 
     if _already_sent_today(db):
         return {"sent": False, "reason": "already sent today"}

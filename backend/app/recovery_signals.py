@@ -18,34 +18,92 @@ def _local_date(ts: datetime) -> date:
     return ts.astimezone(LOCAL_TZ).date()
 
 
-def canonical_nights(db: Session, max_nights: int) -> list:
-    """One sleep_analysis record per night, most recent `max_nights` nights,
-    oldest first.
+def _parse_dt(value):
+    try:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S %z")
+    except (TypeError, ValueError):
+        return None
 
-    HAE emits many overlapping records for a single night -- cumulative
-    snapshots with progressively later sleepStarts, plus a second source
-    (e.g. AutoSleep). Storing each as its own row made downstream code treat
-    every snapshot as a separate 'night', so it read a late fragment (~1.5h)
-    instead of the complete session (~6.8h) and counted rows, not nights, for
-    the baseline. Collapse by night (the payload's midnight-anchored `date`)
-    and keep the record with the largest totalSleep -- the full session."""
+
+def _merged_hours(intervals: list) -> float:
+    """Total hours covered by a set of (start, end) datetime intervals, with
+    overlaps counted once (interval union)."""
+    ivs = sorted((s, e) for s, e in intervals if s and e and e > s)
+    if not ivs:
+        return 0.0
+    total = 0.0
+    cur_s, cur_e = ivs[0]
+    for s, e in ivs[1:]:
+        if s <= cur_e:
+            cur_e = max(cur_e, e)
+        else:
+            total += (cur_e - cur_s).total_seconds()
+            cur_s, cur_e = s, e
+    total += (cur_e - cur_s).total_seconds()
+    return total / 3600.0
+
+
+def canonical_nights(db: Session, max_nights: int) -> list:
+    """One merged record per night, most recent `max_nights` nights, oldest
+    first. Each is a dict: {start, end, total (hours asleep), deep, core, rem}.
+
+    HAE emits many overlapping records per night: cumulative snapshots of one
+    session AND separate trackers (Apple Watch, AutoSleep) that each cover a
+    different part of the night (e.g. AutoSleep 22:37-00:47, Apple Watch
+    00:16-05:51). Picking the single largest record dropped whichever part the
+    other tracker covered (Apple: 7:03; largest single: 5:25). Instead:
+    - group by night (the payload's wake-date, `date[:10]`, which is stable
+      across midnight and across the +09:00->CET tz change);
+    - `total` = interval-union of every window in the night (time in bed),
+      minus the awake time the fullest record recorded -- closely matches
+      Apple's "asleep" and is never below the largest single session;
+    - stage fields come from that fullest record (indicative composition)."""
     rows = (
         db.query(HealthSample)
         .filter(HealthSample.metric_name == "sleep_analysis")
         .all()
     )
-    best_by_night = {}
+    groups: dict = {}
     for row in rows:
         payload = row.raw_payload or {}
-        key = payload.get("date") or _local_date(row.timestamp).isoformat()
-        total = payload.get("totalSleep") or 0
-        best = best_by_night.get(key)
-        best_total = (best.raw_payload or {}).get("totalSleep") or 0 if best is not None else -1
-        if total > best_total:
-            best_by_night[key] = row
+        key = (payload.get("date") or "")[:10] or _local_date(row.timestamp).isoformat()
+        groups.setdefault(key, []).append(row)
 
-    ordered = sorted(best_by_night.values(), key=lambda r: r.timestamp)
-    return ordered[-max_nights:]
+    nights = []
+    for group in groups.values():
+        best = max(group, key=lambda r: (r.raw_payload or {}).get("totalSleep") or 0)
+        bp = best.raw_payload or {}
+        best_total = bp.get("totalSleep") or 0
+
+        intervals, starts, ends = [], [], []
+        for r in group:
+            p = r.raw_payload or {}
+            s, e = _parse_dt(p.get("sleepStart")), _parse_dt(p.get("sleepEnd"))
+            if s and e:
+                intervals.append((s, e))
+                starts.append(s)
+                ends.append(e)
+
+        union_h = _merged_hours(intervals)
+        bs, be = _parse_dt(bp.get("sleepStart")), _parse_dt(bp.get("sleepEnd"))
+        awake_est = 0.0
+        if bs and be:
+            awake_est = max(0.0, (be - bs).total_seconds() / 3600.0 - best_total)
+        total = max(best_total, union_h - awake_est)
+
+        nights.append(
+            {
+                "start": min(starts) if starts else best.timestamp,
+                "end": max(ends) if ends else None,
+                "total": round(total, 3),
+                "deep": bp.get("deep"),
+                "core": bp.get("core"),
+                "rem": bp.get("rem"),
+            }
+        )
+
+    nights.sort(key=lambda n: n["start"])
+    return nights[-max_nights:]
 
 
 def _overnight_avg(db: Session, metric_name: str, sleep_start: datetime, sleep_end: datetime):
@@ -71,21 +129,17 @@ def _resting_hr_for_date(db: Session, night_date: date):
 
 
 def _per_night_values(db: Session, nights: list) -> dict:
-    """For each night (a sleep_analysis HealthSample row), compute this
-    night's value for every tracked metric. Returns {metric: [values...]}
-    aligned index-for-index with `nights` (None where data is missing)."""
+    """For each merged night (a canonical_nights dict), compute this night's
+    value for every tracked metric. Returns {metric: [values...]} aligned
+    index-for-index with `nights` (None where data is missing)."""
     per_metric = {m: [] for m in OVERNIGHT_METRICS + ["sleep_duration", "resting_heart_rate"]}
 
     for night in nights:
-        payload = night.raw_payload or {}
-        sleep_start = night.timestamp
-        sleep_end_raw = payload.get("sleepEnd")
-        sleep_end = (
-            datetime.strptime(sleep_end_raw, "%Y-%m-%d %H:%M:%S %z") if sleep_end_raw else None
-        )
+        sleep_start = night["start"]
+        sleep_end = night["end"]
         night_date = _local_date(sleep_start)
 
-        per_metric["sleep_duration"].append(payload.get("totalSleep"))
+        per_metric["sleep_duration"].append(night["total"])
         per_metric["resting_heart_rate"].append(_resting_hr_for_date(db, night_date))
 
         for metric in OVERNIGHT_METRICS:

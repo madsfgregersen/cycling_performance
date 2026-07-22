@@ -120,44 +120,6 @@ def readiness_recompute(db: Session = Depends(get_db)):
     return readiness.recompute(db)
 
 
-@app.get("/debug/sleep")
-def debug_sleep(db: Session = Depends(get_db)):
-    # TEMP diagnostic (sleep bug round 2 — cross-midnight night). Shows raw
-    # sleep_analysis rows + what canonical_nights collapses them into.
-    from . import recovery_signals
-    from .models import HealthSample
-
-    rows = (
-        db.query(HealthSample)
-        .filter(HealthSample.metric_name == "sleep_analysis")
-        .order_by(HealthSample.timestamp.desc())
-        .limit(30)
-        .all()
-    )
-    raw = [
-        {
-            "ts": r.timestamp.isoformat() if r.timestamp else None,
-            "date": (r.raw_payload or {}).get("date"),
-            "sleepStart": (r.raw_payload or {}).get("sleepStart"),
-            "sleepEnd": (r.raw_payload or {}).get("sleepEnd"),
-            "totalSleep": (r.raw_payload or {}).get("totalSleep"),
-            "source": r.source,
-        }
-        for r in rows
-    ]
-    canon = [
-        {
-            "grouped_ts": n.timestamp.isoformat() if n.timestamp else None,
-            "date": (n.raw_payload or {}).get("date"),
-            "sleepEnd": (n.raw_payload or {}).get("sleepEnd"),
-            "totalSleep": (n.raw_payload or {}).get("totalSleep"),
-            "source": n.source,
-        }
-        for n in recovery_signals.canonical_nights(db, 10)
-    ]
-    return {"raw_rows": raw, "canonical_nights": canon}
-
-
 @app.post("/health/ingest")
 async def ingest_health_data(
     request: Request, token: str = "", db: Session = Depends(get_db)
@@ -395,7 +357,8 @@ def telegram_webhook_status():
 
 @app.get("/telegram/test")
 def telegram_test(db: Session = Depends(get_db)):
-    return telegram.send_morning_verdict(db)
+    # Manual test bypasses the morning-hour gate.
+    return telegram.send_morning_verdict(db, force=True)
 
 
 @app.get("/telegram/test-ride-debrief/{strava_activity_id}")

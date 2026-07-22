@@ -78,14 +78,9 @@ def _recovery_tiles(db: Session) -> dict:
     sleep = []
 
     for night in nights:
-        payload = night.raw_payload or {}
-        sleep_start = night.timestamp
+        sleep_start = night["start"]
+        sleep_end = night["end"]
         night_date = _local_date(sleep_start)
-
-        sleep_end_raw = payload.get("sleepEnd")
-        sleep_end = (
-            datetime.strptime(sleep_end_raw, "%Y-%m-%d %H:%M:%S %z") if sleep_end_raw else None
-        )
 
         hrv_avg = (
             _overnight_avg(db, "heart_rate_variability", sleep_start, sleep_end)
@@ -99,10 +94,10 @@ def _recovery_tiles(db: Session) -> dict:
         sleep.append(
             {
                 "date": night_date.isoformat(),
-                "total": payload.get("totalSleep"),
-                "deep": payload.get("deep"),
-                "core": payload.get("core"),
-                "rem": payload.get("rem"),
+                "total": night["total"],
+                "deep": night["deep"],
+                "core": night["core"],
+                "rem": night["rem"],
             }
         )
 

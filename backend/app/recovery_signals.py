@@ -70,7 +70,7 @@ def canonical_nights(db: Session, max_nights: int) -> list:
         groups.setdefault(key, []).append(row)
 
     nights = []
-    for group in groups.values():
+    for key, group in groups.items():
         best = max(group, key=lambda r: (r.raw_payload or {}).get("totalSleep") or 0)
         bp = best.raw_payload or {}
         best_total = bp.get("totalSleep") or 0
@@ -93,6 +93,7 @@ def canonical_nights(db: Session, max_nights: int) -> list:
 
         nights.append(
             {
+                "date": key,  # wake-date (Apple's label), stable across midnight
                 "start": min(starts) if starts else best.timestamp,
                 "end": max(ends) if ends else None,
                 "total": round(total, 3),
@@ -137,7 +138,7 @@ def _per_night_values(db: Session, nights: list) -> dict:
     for night in nights:
         sleep_start = night["start"]
         sleep_end = night["end"]
-        night_date = _local_date(sleep_start)
+        night_date = date.fromisoformat(night["date"])
 
         per_metric["sleep_duration"].append(night["total"])
         per_metric["resting_heart_rate"].append(_resting_hr_for_date(db, night_date))

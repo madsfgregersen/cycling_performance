@@ -80,7 +80,7 @@ def _recovery_tiles(db: Session) -> dict:
     for night in nights:
         sleep_start = night["start"]
         sleep_end = night["end"]
-        night_date = _local_date(sleep_start)
+        night_date = date.fromisoformat(night["date"])
 
         hrv_avg = (
             _overnight_avg(db, "heart_rate_variability", sleep_start, sleep_end)

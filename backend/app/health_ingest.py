@@ -31,13 +31,30 @@ def _ingest_scalar_metric(db: Session, metric_name: str, samples: list) -> int:
     saved = 0
     for sample in samples:
         timestamp = _parse_date(sample["date"])
-        if _sample_exists(db, metric_name, timestamp):
+        value = sample.get("qty")
+        existing = (
+            db.query(HealthSample)
+            .filter(
+                HealthSample.metric_name == metric_name,
+                HealthSample.timestamp == timestamp,
+            )
+            .first()
+        )
+        if existing is not None:
+            # Apple revises some daily metrics (notably resting_heart_rate: an
+            # early higher estimate, then a lower final value) and HAE re-exports
+            # them at the same timestamp. Update in place so the revised value
+            # wins, instead of keeping the first preliminary reading.
+            if existing.value != value:
+                existing.value = value
+                existing.raw_payload = sample
+                saved += 1
             continue
         db.add(
             HealthSample(
                 metric_name=metric_name,
                 timestamp=timestamp,
-                value=sample.get("qty"),
+                value=value,
                 source=sample.get("source"),
                 raw_payload=sample,
             )

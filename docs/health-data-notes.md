@@ -20,6 +20,15 @@
   dependence on Apple's native feature.
 - **Resting HR lags ~1 day.** Apple computes it late morning; the
   collapse job must tolerate this metric arriving behind the others.
+- **Apple *revises* daily resting HR — ingest must upsert, not skip.** Apple
+  emits an early (higher) resting-HR estimate for a day, then revises it lower
+  once a full day of restful data is in. HAE re-exports the same day at the
+  same midnight timestamp with the revised value. The old scalar ingest
+  skipped anything with a known `(metric, timestamp)`, so it kept the first
+  preliminary value forever (read 63/60 where Apple showed 55). `_ingest_scalar_metric`
+  now **updates the stored value in place** when a re-export carries a
+  different value. Existing stale rows correct themselves on the next export
+  (auto or manual) that re-sends those days.
 - **HAE sends many `sleep_analysis` records per night, not one — and often
   more than one tracker.** A night arrives as ~10 overlapping cumulative
   snapshots (same `date`/`sleepEnd`, progressively later `sleepStart`, growing

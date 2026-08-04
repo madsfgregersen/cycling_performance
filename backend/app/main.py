@@ -120,6 +120,43 @@ def readiness_recompute(db: Session = Depends(get_db)):
     return readiness.recompute(db)
 
 
+@app.get("/debug/rhr")
+def debug_rhr(db: Session = Depends(get_db)):
+    # TEMP diagnostic: dump raw resting_heart_rate samples grouped by local
+    # date, so we can see per-day multiplicity + which value we'd pick.
+    from collections import defaultdict
+
+    from . import recovery_signals
+    from .models import HealthSample
+
+    rows = (
+        db.query(HealthSample)
+        .filter(HealthSample.metric_name == "resting_heart_rate")
+        .order_by(HealthSample.timestamp)
+        .all()
+    )
+    by_day = defaultdict(list)
+    for r in rows:
+        d = recovery_signals._local_date(r.timestamp).isoformat() if r.timestamp else None
+        by_day[d].append(
+            {
+                "ts": r.timestamp.isoformat() if r.timestamp else None,
+                "value": r.value,
+                "source": r.source,
+                "payload_date": (r.raw_payload or {}).get("date"),
+            }
+        )
+    # Show the last ~12 days, and what _resting_hr_for_date currently returns.
+    days = sorted(k for k in by_day if k)[-12:]
+    import datetime as _dt
+
+    out = []
+    for d in days:
+        picked = recovery_signals._resting_hr_for_date(db, _dt.date.fromisoformat(d))
+        out.append({"date": d, "picked_value": picked, "samples": by_day[d]})
+    return out
+
+
 @app.post("/health/ingest")
 async def ingest_health_data(
     request: Request, token: str = "", db: Session = Depends(get_db)

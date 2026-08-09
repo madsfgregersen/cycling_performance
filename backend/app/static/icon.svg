@@ -1,0 +1,50 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1C1F27"/>
+      <stop offset="100%" stop-color="#101216"/>
+    </linearGradient>
+
+    <linearGradient id="drop" x1="30%" y1="0%" x2="70%" y2="100%">
+      <stop offset="0%" stop-color="#2DD4BF"/>
+      <stop offset="48%" stop-color="#5B6EE8"/>
+      <stop offset="100%" stop-color="#FF5A46"/>
+    </linearGradient>
+
+    <linearGradient id="sheen" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+
+    <clipPath id="dropClip">
+      <path d="M256,90 C256,90 140,228 140,302 A116,116 0 0 0 372,302 C372,228 256,90 256,90 Z"/>
+    </clipPath>
+
+    <filter id="soften" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+  </defs>
+
+  <!-- app-icon squircle background -->
+  <rect x="0" y="0" width="512" height="512" rx="114" ry="114" fill="url(#bg)"/>
+
+  <!-- sweat drop -->
+  <path d="M256,90 C256,90 140,228 140,302 A116,116 0 0 0 372,302 C372,228 256,90 256,90 Z"
+        fill="url(#drop)"/>
+
+  <!-- elevation-profile signature: the climbs of the route, cut through the drop -->
+  <g clip-path="url(#dropClip)" stroke="#101216" stroke-opacity="0.35" stroke-width="10"
+     fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M112,352 L166,352 L192,300 L222,352 L252,318 L280,352 L308,296 L336,352 L400,352"/>
+  </g>
+  <g clip-path="url(#dropClip)" stroke="#FFFFFF" stroke-opacity="0.55" stroke-width="4"
+     fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M112,352 L166,352 L192,300 L222,352 L252,318 L280,352 L308,296 L336,352 L400,352"/>
+  </g>
+
+  <!-- glass highlight for depth -->
+  <g clip-path="url(#dropClip)">
+    <ellipse cx="203" cy="175" rx="46" ry="28" fill="#FFFFFF" opacity="0.30"
+             filter="url(#soften)" transform="rotate(-28 203 175)"/>
+  </g>
+</svg>

@@ -5,6 +5,7 @@ from typing import Optional
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -72,6 +73,8 @@ class GoalIn(BaseModel):
 STATIC_DIR = Path(__file__).parent / "static"
 
 app = FastAPI(title="Cycling Performance API")
+# Serve the dashboard's static assets (icons, etc.) at /static.
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 def public_base_url(request: Request) -> str:

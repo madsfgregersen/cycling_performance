@@ -1002,16 +1002,23 @@ function rideStatsHtml(rd, multi){
   return html;
 }
 function zoneColor(z){ return {z1:'#8A8F96',z2:'#3E7CB1',z3:'#B0700F',z4:'#C0392B',z5:'#C0392B'}[z]||'#8A8F96'; }
+function lapSec(l){ return (l.end_s!=null&&l.start_s!=null)?(l.end_s-l.start_s+1):(l.duration_min!=null?Math.round(l.duration_min*60):null); }
+function fmtLapTime(sec){
+  if(sec==null) return '—';
+  sec=Math.round(sec);
+  var h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60, pad=function(n){return (n<10?'0':'')+n;};
+  return h>0 ? (h+':'+pad(m)+':'+pad(s)) : (m+':'+pad(s));
+}
 function rideLapsHtml(laps){
   if(!laps || laps.length<2) return '';  // 1 lap = unstructured ride, nothing to partition
   var totalMin=laps.reduce(function(s,l){return s+(l.duration_min||0);},0)||1;
   var strip='<div class="lapstrip">'+laps.map(function(l){
     var w=((l.duration_min||0)/totalMin*100).toFixed(2);
-    return '<div class="lapseg" style="flex:0 0 '+w+'%;background:'+zoneColor(l.zone)+'" title="lap '+l.lap+' · '+(l.zone||'').toUpperCase()+' · '+(l.duration_min||0)+'m · '+(l.avg_power||'—')+'W"></div>';
+    return '<div class="lapseg" style="flex:0 0 '+w+'%;background:'+zoneColor(l.zone)+'" title="lap '+l.lap+' · '+(l.zone||'').toUpperCase()+' · '+fmtLapTime(lapSec(l))+' · '+(l.avg_power||'—')+'W"></div>';
   }).join('')+'</div>';
   var rows=laps.map(function(l){
     return '<tr><td><span class="zbadge" style="background:'+zoneColor(l.zone)+'">'+(l.zone||'—').toUpperCase()+'</span></td>'
-      +'<td>'+(l.duration_min!=null?l.duration_min+'m':'—')+'</td>'
+      +'<td>'+fmtLapTime(lapSec(l))+'</td>'
       +'<td>'+(l.avg_power!=null?l.avg_power+' W':'—')+'</td>'
       +'<td>'+(l.lap_tss!=null?l.lap_tss:'—')+'</td></tr>';
   }).join('');

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from . import ai_coach, ride_metrics
 from .activity_log import log_event
 from .coach_voice import COACH_SYSTEM_PROMPT
-from .models import IntegrationLog, PlannedWorkout, TelegramCheckin
+from .models import IntegrationLog, PlannedWorkout, RideLap, TelegramCheckin
 
 from .localtime import LOCAL_TZ
 
@@ -30,9 +30,51 @@ def _planned_workout_for(db: Session, ride_local_date):
     return {"target_tss": row.target_tss, "zone": row.zone, "notes": row.notes}
 
 
+def _laps_for(db: Session, ride):
+    """Per-lap breakdown (the athlete's lap-button partition) so the coach can
+    separate warm-up/cool-down from the work reps. Returns (laps, time_in_zone)
+    or (None, None) if the ride has no laps."""
+    rows = (
+        db.query(RideLap)
+        .filter(RideLap.ride_id == ride.id)
+        .order_by(RideLap.lap_index)
+        .all()
+    )
+    if not rows:
+        return None, None
+
+    laps = []
+    time_in_zone = {}
+    for r in rows:
+        dur_min = (
+            round((r.end_offset_s - r.start_offset_s + 1) / 60, 1)
+            if r.start_offset_s is not None and r.end_offset_s is not None
+            else None
+        )
+        laps.append(
+            {
+                "lap": r.lap_index,
+                "zone": r.intensity_zone,
+                "minutes": dur_min,
+                "avg_power": round(r.avg_power) if r.avg_power else None,
+                "normalized_power": round(r.normalized_power) if r.normalized_power else None,
+                "intensity_factor": r.intensity_factor,
+                "lap_tss": r.lap_tss,
+                "avg_hr": round(r.avg_hr) if r.avg_hr else None,
+                "max_hr": round(r.max_hr) if r.max_hr else None,
+                "avg_cadence": round(r.avg_cadence) if r.avg_cadence else None,
+            }
+        )
+        if r.intensity_zone and dur_min:
+            time_in_zone[r.intensity_zone] = round(time_in_zone.get(r.intensity_zone, 0) + dur_min, 1)
+
+    return laps, time_in_zone
+
+
 def build_ride_context(db: Session, ride) -> dict:
     ride_local_date = ride.start_date.astimezone(LOCAL_TZ).date()
     metrics = ride_metrics.compute_ride_metrics(db, ride)
+    laps, time_in_zone = _laps_for(db, ride)
 
     return {
         "ride": {
@@ -49,6 +91,10 @@ def build_ride_context(db: Session, ride) -> dict:
         },
         "efficiency_factor": metrics["efficiency_factor"],
         "decoupling_pct": metrics["decoupling_pct"],
+        # laps = the athlete's own lap-button presses, each with its zone and
+        # training load. Null for rides ridden without laps.
+        "laps": laps,
+        "time_in_zone_minutes": time_in_zone,
         "planned_workout_that_day": _planned_workout_for(db, ride_local_date),
     }
 
@@ -64,7 +110,15 @@ def explain_ride(db: Session, ride) -> dict:
         "data to call it -- don't mention it in that case). If a planned "
         "workout existed that day, judge the ride against what it was for; "
         "if planned_workout_that_day is null, it was an unplanned/extra ride "
-        "-- say so rather than inventing a purpose for it."
+        "-- say so rather than inventing a purpose for it.\n\n"
+        "If laps are given, they are the athlete's own lap-button presses -- "
+        "the ride's real structure. Read them to find the work: the long "
+        "lower-intensity laps at the start and end are warm-up and cool-down, "
+        "and must NOT dilute your evaluation of the session. Judge the WORK "
+        "laps (the intervals) on their own -- power held, how it held across "
+        "reps (fade or hold), and HR drift through the set -- citing the "
+        "per-lap numbers. If laps is null, you only have the whole-ride "
+        "averages, so don't invent interval structure."
     )
     return ai_coach.ask_claude_structured(prompt, COACH_SYSTEM_PROMPT, RIDE_DEBRIEF_SCHEMA, category="ride_debrief")
 

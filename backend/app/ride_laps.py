@@ -111,7 +111,9 @@ def sync_ride_laps(db: Session, ride: RideSummary) -> dict:
         # start_index/end_index are positions into the stream arrays, which we
         # stored one row per sample in time order.
         segment = streams[start_index : end_index + 1]
-        if not segment:
+        if len(segment) < 3:
+            # Skip degenerate laps (a 0-1s trailing lap at the stop) -- they'd
+            # show as empty 0-minute laps.
             continue
         metrics = _compute_lap_metrics(segment)
         db.add(

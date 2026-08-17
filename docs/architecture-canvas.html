@@ -118,7 +118,7 @@
 
   <h1>Cycling Performance — Architecture Canvas</h1>
   <div class="sub">A private, personal cycling-training app for one athlete building toward the Geo Park Gran Fondo (30 Aug 2026). Python/FastAPI + Postgres on Railway, with two surfaces (a web dashboard and a Telegram bot) over a shared backend, and an LLM-backed coach layered on top. Read top→bottom: data flows in from the left, is stored in six buckets, computed into readiness, interpreted by the coach, and delivered to the two surfaces.</div>
-  <div class="asof">As of 16 Jul 2026</div>
+  <div class="asof">As of 16 Aug 2026</div>
 
   <!-- LEGEND -->
   <div class="legend">
@@ -188,7 +188,7 @@
       <div class="bk sacred"><div class="n">5</div><div class="t">daily_readiness <span class="tag">SACRED</span></div><div class="m">Computed CTL/ATL/TSB + verdict. Sole dashboard source.</div></div>
       <div class="bk"><div class="n">6</div><div class="t">planned_workouts</div><div class="m">Future date + target TSS/zone/title. Provisional.</div></div>
     </div>
-    <div class="sub-tables"><b>Supporting tables:</b> plan_constraints &amp; plan_adjustment_proposals · plan_blocks (7-week structure) · race_goal · messaging_settings · integration_log <i>(audit trail + the coach thread store)</i> · llm_usage + app_config <i>(cost log + active model)</i> · strava_tokens.</div>
+    <div class="sub-tables"><b>Supporting tables:</b> ride_laps <i>(lap partition + per-lap training values)</i> · plan_constraints &amp; plan_adjustment_proposals · plan_blocks (7-week structure) · race_goal · messaging_settings · integration_log <i>(audit trail + the coach thread store)</i> · llm_usage + app_config <i>(cost log + active model)</i> · strava_tokens.</div>
   </div>
 
   <div class="chev"><span class="lab">compute on write &amp; on demand</span> ▼</div>
@@ -200,6 +200,7 @@
     <div class="row">
       <div class="box"><div class="t">readiness.recompute</div><div class="m">Ride TSS → rolling CTL/ATL/TSB → green/amber/red verdict → bucket 5.</div></div>
       <div class="box"><div class="t">ride_metrics</div><div class="m">Efficiency factor &amp; aerobic decoupling from streams.</div></div>
+      <div class="box"><div class="t">ride_laps</div><div class="m">Partitions a ride by the athlete's Garmin lap-button presses → per-lap NP/IF/TSS + Coggan zone (from the stream slice + FTP). Isolates warm-up/cool-down from the work.</div></div>
       <div class="box"><div class="t">recovery_signals</div><div class="m">Overnight HRV/RHR/sleep deviations vs baseline. <code>canonical_nights</code> collapses HAE's per-night snapshots.</div></div>
       <div class="box"><div class="t">forward projection</div><div class="m">CTL/ATL/TSB projected from bucket 6. Compute-on-demand; never written back.</div></div>
     </div>
@@ -226,7 +227,7 @@
         <div class="subhead" style="margin-top:11px">Proactive voice (pushed on events; read-only, one-directional)</div>
         <div class="row">
           <div class="box proactive"><div class="t">morning verdict</div><div class="m">coach_morning</div></div>
-          <div class="box proactive"><div class="t">ride debrief</div><div class="m">coach_ride</div></div>
+          <div class="box proactive"><div class="t">ride debrief</div><div class="m">coach_ride — lap-aware (judges the work reps, not warm-up/cool-down)</div></div>
           <div class="box proactive"><div class="t">missed workout</div><div class="m">coach_missed_workout</div></div>
           <div class="box proactive"><div class="t">weekly summary</div><div class="m">coach_weekly_summary</div></div>
           <div class="box proactive"><div class="t">constraint drift</div><div class="m">coach_constraint_drift</div></div>
@@ -259,7 +260,8 @@
     <div class="flow">
       <span class="step">Strava webhook</span><span class="a">→</span>
       <span class="step">backfill.ingest_single_activity</span><span class="a">→</span>
-      <span class="step">buckets 1 + 2</span><span class="a">→</span>
+      <span class="step">buckets 1 + 2</span><span class="a">+</span>
+      <span class="step">ride_laps.sync (lap partition)</span><span class="a">→</span>
       <span class="step">readiness.recompute</span><span class="a">→</span>
       <span class="step">bucket 5</span><span class="a">→</span>
       <span class="step">telegram post-ride debrief + feel ask</span><span class="a">→</span>
@@ -296,6 +298,7 @@
 
     <h3>Changelog</h3>
     <ul class="chg">
+      <li><span class="d">2026-08-16</span>Ride laps: capture the athlete's Garmin lap-button partition (<code>ride_laps</code> table + module) with per-lap NP/IF/TSS + Coggan zone; the ride debrief is now lap-aware (evaluates the work reps, not warm-up/cool-down). Also since the initial canvas: app timezone fix (<code>localtime</code>, CET/DST-aware, replacing hardcoded UTC+9); multi-tracker sleep merge + morning-verdict hour gate; resting-HR revision upsert; home-screen icon + <code>/static</code> mount.</li>
       <li><span class="d">2026-07-16</span>Initial canvas — full snapshot: six buckets + supporting tables, ingestion, compute, the coach brain (4 reactive branches + 5 proactive modules), both surfaces, and the two hot-paths.</li>
     </ul>
 
@@ -303,7 +306,7 @@
     <div class="srcs">
       backend/app/main.py · models.py · database.py<br>
       strava.py · strava_webhook.py · backfill.py · health_ingest.py · telegram.py<br>
-      readiness.py · ride_metrics.py · recovery_signals.py · dashboard.py<br>
+      readiness.py · ride_metrics.py · ride_laps.py · recovery_signals.py · localtime.py · dashboard.py<br>
       ai_coach.py · coach_voice.py · coach_context.py · coach_conversation.py<br>
       coach_plan_adjust.py · coach_plan_structure.py · coach_plan_compile.py · coach_qa.py<br>
       coach_morning.py · coach_ride.py · coach_missed_workout.py · coach_weekly_summary.py · coach_constraint_drift.py<br>

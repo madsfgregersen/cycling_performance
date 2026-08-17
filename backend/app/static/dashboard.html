@@ -119,7 +119,7 @@ textarea{resize:vertical;line-height:1.45}
 
 .modal-bg{position:fixed;inset:0;background:rgba(20,20,18,.32);display:none;align-items:center;justify-content:center;z-index:60}
 .modal-bg.on{display:flex}
-.modal{background:#fff;border-radius:14px;padding:20px;width:300px;box-shadow:0 12px 40px rgba(0,0,0,.2)}
+.modal{background:#fff;border-radius:14px;padding:20px;width:300px;box-shadow:0 12px 40px rgba(0,0,0,.2);max-height:88vh;overflow-y:auto}
 .modal h3{margin:0 0 2px;font-size:15px}
 .modal .sub{font-size:12px;color:var(--faint);margin-bottom:14px}
 .field{margin-bottom:12px}
@@ -398,7 +398,7 @@ textarea{resize:vertical;line-height:1.45}
   </div>
 </div>
 
-<div class="modal-bg" id="ride-modal">
+<div class="modal-bg" id="ride-modal" onclick="if(event.target===this)closeRideModal()">
   <div class="modal">
     <h3 id="ride-modal-title">Recorded ride</h3>
     <div class="sub" id="ride-modal-date"></div>
@@ -1007,19 +1007,17 @@ function rideLapsHtml(laps){
   var totalMin=laps.reduce(function(s,l){return s+(l.duration_min||0);},0)||1;
   var strip='<div class="lapstrip">'+laps.map(function(l){
     var w=((l.duration_min||0)/totalMin*100).toFixed(2);
-    return '<div class="lapseg" style="flex:0 0 '+w+'%;background:'+zoneColor(l.zone)+'" title="lap '+l.lap+' · '+(l.zone||'').toUpperCase()+' · '+(l.duration_min||0)+'m · '+(l.normalized_power||'—')+'W"></div>';
+    return '<div class="lapseg" style="flex:0 0 '+w+'%;background:'+zoneColor(l.zone)+'" title="lap '+l.lap+' · '+(l.zone||'').toUpperCase()+' · '+(l.duration_min||0)+'m · '+(l.avg_power||'—')+'W"></div>';
   }).join('')+'</div>';
   var rows=laps.map(function(l){
     return '<tr><td><span class="zbadge" style="background:'+zoneColor(l.zone)+'">'+(l.zone||'—').toUpperCase()+'</span></td>'
       +'<td>'+(l.duration_min!=null?l.duration_min+'m':'—')+'</td>'
-      +'<td>'+(l.avg_power!=null?l.avg_power:'—')+' / '+(l.normalized_power!=null?l.normalized_power:'—')+'</td>'
-      +'<td>'+(l.intensity_factor!=null?l.intensity_factor:'—')+'</td>'
-      +'<td>'+(l.lap_tss!=null?l.lap_tss:'—')+'</td>'
-      +'<td>'+(l.avg_hr!=null?l.avg_hr:'—')+'</td></tr>';
+      +'<td>'+(l.avg_power!=null?l.avg_power+' W':'—')+'</td>'
+      +'<td>'+(l.lap_tss!=null?l.lap_tss:'—')+'</td></tr>';
   }).join('');
-  return '<div class="lapwrap"><div class="cap" style="margin-bottom:5px">Laps &middot; your lap-button presses (power = avg / normalized)</div>'
+  return '<div class="lapwrap"><div class="cap" style="margin-bottom:5px">Laps &middot; your lap-button presses</div>'
     +strip
-    +'<table class="laptbl"><thead><tr><th>Zone</th><th>Time</th><th>Power</th><th>IF</th><th>TSS</th><th>HR</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    +'<table class="laptbl"><thead><tr><th>Zone</th><th>Time</th><th>Power</th><th>TSS</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function coachEvalHtml(det){
   var evalText = det && det.coach && det.coach.why;

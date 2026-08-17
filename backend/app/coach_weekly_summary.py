@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from . import ai_coach, plan_blocks
 from .coach_voice import COACH_SYSTEM_PROMPT
-from .models import DailyReadiness, PlannedWorkout, RideSummary
+from .models import DailyReadiness, PlannedWorkout, RideLap, RideSummary
 
 from .localtime import LOCAL_TZ
 
@@ -29,6 +29,54 @@ def find_week_ending_yesterday(db: Session, today: date):
         if end == yesterday:
             return week
     return None
+
+
+def _session_shapes(db: Session, rides: list) -> list:
+    """One compact 'shape' per ride so the weekly summary can read each
+    session's structure -- the lap sequence (zone / minutes / NP, the athlete's
+    lap-button presses) plus time-in-zone -- not just the week's TSS total.
+    laps is null for a ride ridden without laps (an unstructured/endurance
+    ride)."""
+    shapes = []
+    for ride in sorted(rides, key=lambda r: r.start_date):
+        laps = (
+            db.query(RideLap)
+            .filter(RideLap.ride_id == ride.id)
+            .order_by(RideLap.lap_index)
+            .all()
+        )
+        compact = None
+        time_in_zone = {}
+        if laps:
+            compact = []
+            for lap in laps:
+                minutes = (
+                    round((lap.end_offset_s - lap.start_offset_s + 1) / 60, 1)
+                    if lap.start_offset_s is not None and lap.end_offset_s is not None
+                    else None
+                )
+                compact.append(
+                    {
+                        "zone": lap.intensity_zone,
+                        "min": minutes,
+                        "np": round(lap.normalized_power) if lap.normalized_power else None,
+                    }
+                )
+                if lap.intensity_zone and minutes:
+                    time_in_zone[lap.intensity_zone] = round(
+                        time_in_zone.get(lap.intensity_zone, 0) + minutes, 1
+                    )
+        shapes.append(
+            {
+                "date": ride.start_date.astimezone(LOCAL_TZ).date().isoformat(),
+                "name": ride.name,
+                "tss": round(ride.ride_tss, 1) if ride.ride_tss else None,
+                "moving_min": round(ride.moving_time_s / 60) if ride.moving_time_s else None,
+                "time_in_zone_min": time_in_zone or None,
+                "laps": compact,
+            }
+        )
+    return shapes
 
 
 def build_weekly_context(db: Session, week: dict) -> dict:
@@ -65,6 +113,7 @@ def build_weekly_context(db: Session, week: dict) -> dict:
             "total_tss": round(total_tss, 1),
             "total_hours": round(total_hours, 1),
         },
+        "sessions": _session_shapes(db, rides),
         "planned": {
             "workout_count": len(planned),
             "total_target_tss": round(planned_tss, 1),
@@ -84,6 +133,16 @@ def explain_week(db: Session, context: dict) -> dict:
         + json.dumps(context, indent=2)
         + "\n\nWrite a short weekly summary. Compare actual TSS/hours/rides to "
         "what was planned and to the block's stated focus. Only use the "
-        "readiness numbers given -- if a value is null, don't state it."
+        "readiness numbers given -- if a value is null, don't state it.\n\n"
+        "The 'sessions' list gives each ride's structure via its laps (the "
+        "athlete's lap-button presses -- zone / minutes / NP per lap). Judge "
+        "the week by its SESSIONS, not just total TSS: recognize each key "
+        "workout's interval type (over-unders alternate z4/z5 'overs' with z3 "
+        "'unders'; threshold = sustained z4; VO2 = short z5 reps; sweet-spot = "
+        "high z3 / low z4; endurance = z2) and whether the work was executed "
+        "-- ignoring the long z1/z2 warm-up and cool-down laps. Then roll it up: "
+        "e.g. 'two solid threshold sessions and a long endurance ride -- on "
+        "plan for the block's z4 focus.' A ride with laps=null is an "
+        "unstructured/endurance ride; don't invent structure for it."
     )
     return ai_coach.ask_claude_structured(prompt, COACH_SYSTEM_PROMPT, WEEKLY_SUMMARY_SCHEMA, category="weekly_summary")

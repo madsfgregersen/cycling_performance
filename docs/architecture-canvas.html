@@ -229,7 +229,7 @@
           <div class="box proactive"><div class="t">morning verdict</div><div class="m">coach_morning</div></div>
           <div class="box proactive"><div class="t">ride debrief</div><div class="m">coach_ride — lap-aware (judges the work reps, not warm-up/cool-down)</div></div>
           <div class="box proactive"><div class="t">missed workout</div><div class="m">coach_missed_workout</div></div>
-          <div class="box proactive"><div class="t">weekly summary</div><div class="m">coach_weekly_summary</div></div>
+          <div class="box proactive"><div class="t">weekly summary</div><div class="m">coach_weekly_summary — session/interval-aware (reads each ride's lap structure)</div></div>
           <div class="box proactive"><div class="t">constraint drift</div><div class="m">coach_constraint_drift</div></div>
         </div>
       </div>
@@ -298,7 +298,7 @@
 
     <h3>Changelog</h3>
     <ul class="chg">
-      <li><span class="d">2026-08-16</span>Ride laps: capture the athlete's Garmin lap-button partition (<code>ride_laps</code> table + module) with per-lap NP/IF/TSS + Coggan zone; the ride debrief is now lap-aware (evaluates the work reps, not warm-up/cool-down). Also since the initial canvas: app timezone fix (<code>localtime</code>, CET/DST-aware, replacing hardcoded UTC+9); multi-tracker sleep merge + morning-verdict hour gate; resting-HR revision upsert; home-screen icon + <code>/static</code> mount.</li>
+      <li><span class="d">2026-08-16</span>Ride laps: capture the athlete's Garmin lap-button partition (<code>ride_laps</code> table + module) with per-lap NP/IF/TSS + Coggan zone; the ride debrief and weekly summary are now lap/interval-aware (recognize interval types — over-unders, threshold, VO2 — and evaluate the work, not warm-up/cool-down). Also since the initial canvas: app timezone fix (<code>localtime</code>, CET/DST-aware, replacing hardcoded UTC+9); multi-tracker sleep merge + morning-verdict hour gate; resting-HR revision upsert; home-screen icon + <code>/static</code> mount.</li>
       <li><span class="d">2026-07-16</span>Initial canvas — full snapshot: six buckets + supporting tables, ingestion, compute, the coach brain (4 reactive branches + 5 proactive modules), both surfaces, and the two hot-paths.</li>
     </ul>
 

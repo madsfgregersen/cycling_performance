@@ -125,13 +125,20 @@ def backfill_laps(db: Session = Depends(get_db)):
     return ride_laps.backfill_laps(db)
 
 
-@app.get("/rides/{ride_id}/laps")
-def ride_laps_view(ride_id: int, db: Session = Depends(get_db)):
+@app.get("/rides/{strava_activity_id}/laps")
+def ride_laps_view(strava_activity_id: int, db: Session = Depends(get_db)):
     from .models import RideLap
 
+    ride = (
+        db.query(RideSummary)
+        .filter(RideSummary.strava_activity_id == strava_activity_id)
+        .first()
+    )
+    if ride is None:
+        raise HTTPException(status_code=404, detail="no ride with that activity id")
     rows = (
         db.query(RideLap)
-        .filter(RideLap.ride_id == ride_id)
+        .filter(RideLap.ride_id == ride.id)
         .order_by(RideLap.lap_index)
         .all()
     )

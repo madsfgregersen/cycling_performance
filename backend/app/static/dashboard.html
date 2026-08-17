@@ -101,6 +101,14 @@ textarea{resize:vertical;line-height:1.45}
 .wo.z3{background:var(--amber-bg);border-color:var(--z3)}
 .wo.z4{background:#F9E9E7;border-color:var(--z4)}
 .wo.z5{background:#F9E9E7;border-color:var(--z4)}
+.lapwrap{margin-top:12px}
+.lapstrip{display:flex;height:26px;border-radius:6px;overflow:hidden;border:.5px solid var(--line)}
+.lapseg{min-width:2px}
+.laptbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+.laptbl th{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);font-weight:600;text-align:right;padding:3px 6px}
+.laptbl th:first-child,.laptbl td:first-child{text-align:left}
+.laptbl td{padding:3px 6px;border-top:.5px solid var(--line);font-family:var(--mono);text-align:right}
+.zbadge{display:inline-block;min-width:24px;text-align:center;border-radius:4px;color:#fff;font-size:10px;font-weight:600;padding:1px 3px}
 .wo.done{background:var(--green-bg);border-color:var(--green);cursor:pointer;touch-action:auto}
 .wo.done .t{color:var(--green)}
 .wo.missed{opacity:.5;border-left-style:dashed}
@@ -993,6 +1001,26 @@ function rideStatsHtml(rd, multi){
   html+=rideRow('Elevation', rd.elevation_gain_m!=null?Math.round(rd.elevation_gain_m)+' m':'—');
   return html;
 }
+function zoneColor(z){ return {z1:'#8A8F96',z2:'#3E7CB1',z3:'#B0700F',z4:'#C0392B',z5:'#C0392B'}[z]||'#8A8F96'; }
+function rideLapsHtml(laps){
+  if(!laps || laps.length<2) return '';  // 1 lap = unstructured ride, nothing to partition
+  var totalMin=laps.reduce(function(s,l){return s+(l.duration_min||0);},0)||1;
+  var strip='<div class="lapstrip">'+laps.map(function(l){
+    var w=((l.duration_min||0)/totalMin*100).toFixed(2);
+    return '<div class="lapseg" style="flex:0 0 '+w+'%;background:'+zoneColor(l.zone)+'" title="lap '+l.lap+' · '+(l.zone||'').toUpperCase()+' · '+(l.duration_min||0)+'m · '+(l.normalized_power||'—')+'W"></div>';
+  }).join('')+'</div>';
+  var rows=laps.map(function(l){
+    return '<tr><td><span class="zbadge" style="background:'+zoneColor(l.zone)+'">'+(l.zone||'—').toUpperCase()+'</span></td>'
+      +'<td>'+(l.duration_min!=null?l.duration_min+'m':'—')+'</td>'
+      +'<td>'+(l.avg_power!=null?l.avg_power:'—')+' / '+(l.normalized_power!=null?l.normalized_power:'—')+'</td>'
+      +'<td>'+(l.intensity_factor!=null?l.intensity_factor:'—')+'</td>'
+      +'<td>'+(l.lap_tss!=null?l.lap_tss:'—')+'</td>'
+      +'<td>'+(l.avg_hr!=null?l.avg_hr:'—')+'</td></tr>';
+  }).join('');
+  return '<div class="lapwrap"><div class="cap" style="margin-bottom:5px">Laps &middot; your lap-button presses (power = avg / normalized)</div>'
+    +strip
+    +'<table class="laptbl"><thead><tr><th>Zone</th><th>Time</th><th>Power</th><th>IF</th><th>TSS</th><th>HR</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
 function coachEvalHtml(det){
   var evalText = det && det.coach && det.coach.why;
   var feel = det && det.feel;
@@ -1021,12 +1049,16 @@ function openRideDetail(rides, planned){
     plannedHtml='<div style="margin-top:12px;padding-top:9px;border-top:.5px solid var(--line);font-size:12.5px;color:var(--muted)"><b style="color:var(--ink)">Planned that day:</b> '+Math.round(sumField(planned,'target_tss'))+' TSS'+(notes?(' &middot; '+escapeHtml(notes)):'')+'</div>';
   }
   Promise.all(rides.map(function(rd){
-    return fetch('/rides/'+rd.strava_activity_id).then(function(r){return r.json();}).catch(function(){return {};});
-  })).then(function(details){
+    return Promise.all([
+      fetch('/rides/'+rd.strava_activity_id).then(function(r){return r.json();}).catch(function(){return {};}),
+      fetch('/rides/'+rd.strava_activity_id+'/laps').then(function(r){return r.json();}).catch(function(){return [];})
+    ]);
+  })).then(function(pairs){
     var html='';
     rides.forEach(function(rd,idx){
       html+=rideStatsHtml(rd, multi);
-      html+=coachEvalHtml(details[idx]);
+      html+=rideLapsHtml(pairs[idx][1]);
+      html+=coachEvalHtml(pairs[idx][0]);
     });
     html+=plannedHtml;
     body.innerHTML=html;

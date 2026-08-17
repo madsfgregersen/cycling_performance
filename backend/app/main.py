@@ -32,6 +32,7 @@ from . import (
     plan_constraints,
     planned_workouts,
     race_goal,
+    ride_laps,
     race_plan,
     readiness,
     strava,
@@ -116,6 +117,43 @@ def strava_status(db: Session = Depends(get_db)):
 @app.get("/backfill/rides")
 def backfill_rides(days: int = 60, db: Session = Depends(get_db)):
     return backfill.run_backfill(db, days)
+
+
+@app.get("/backfill/laps")
+def backfill_laps(db: Session = Depends(get_db)):
+    # One-off: pull + compute laps for every ride already stored.
+    return ride_laps.backfill_laps(db)
+
+
+@app.get("/rides/{ride_id}/laps")
+def ride_laps_view(ride_id: int, db: Session = Depends(get_db)):
+    from .models import RideLap
+
+    rows = (
+        db.query(RideLap)
+        .filter(RideLap.ride_id == ride_id)
+        .order_by(RideLap.lap_index)
+        .all()
+    )
+    return [
+        {
+            "lap": r.lap_index,
+            "zone": r.intensity_zone,
+            "start_s": r.start_offset_s,
+            "end_s": r.end_offset_s,
+            "duration_min": round((r.end_offset_s - r.start_offset_s + 1) / 60, 1)
+            if r.start_offset_s is not None and r.end_offset_s is not None
+            else None,
+            "avg_power": round(r.avg_power) if r.avg_power else None,
+            "normalized_power": r.normalized_power,
+            "intensity_factor": r.intensity_factor,
+            "lap_tss": r.lap_tss,
+            "avg_hr": round(r.avg_hr) if r.avg_hr else None,
+            "avg_cadence": round(r.avg_cadence) if r.avg_cadence else None,
+            "name": r.name,
+        }
+        for r in rows
+    ]
 
 
 @app.get("/readiness/recompute")

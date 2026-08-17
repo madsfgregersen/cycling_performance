@@ -54,6 +54,44 @@ class RideStream(Base):
     longitude = Column(Float, nullable=True)
 
 
+class RideLap(Base):
+    """A lap (the athlete's Garmin lap-button presses, or auto-laps) —
+    partitions a ride into segments so warm-up/cool-down don't dilute the
+    interval work. Boundaries come from Strava (start/end index into the
+    streams); the training values are computed from this ride's own
+    ride_streams slice + the athlete's FTP, and refreshed on recompute."""
+
+    __tablename__ = "ride_laps"
+
+    ride_id = Column(Integer, ForeignKey("rides_summary.id"), primary_key=True)
+    lap_index = Column(Integer, primary_key=True)  # 0-based, in ride order
+
+    # boundaries, aligned to ride_streams.second_offset
+    start_offset_s = Column(Integer, nullable=True)
+    end_offset_s = Column(Integer, nullable=True)
+
+    # raw Strava lap facts
+    name = Column(String, nullable=True)
+    distance_m = Column(Float, nullable=True)
+    moving_time_s = Column(Integer, nullable=True)
+    elapsed_time_s = Column(Integer, nullable=True)
+    elevation_gain_m = Column(Float, nullable=True)
+
+    # computed from the lap's stream slice + FTP
+    avg_power = Column(Float, nullable=True)
+    normalized_power = Column(Float, nullable=True)
+    max_power = Column(Float, nullable=True)
+    avg_hr = Column(Float, nullable=True)
+    max_hr = Column(Float, nullable=True)
+    avg_cadence = Column(Float, nullable=True)
+    avg_speed = Column(Float, nullable=True)
+    intensity_factor = Column(Float, nullable=True)
+    lap_tss = Column(Float, nullable=True)
+    intensity_zone = Column(String, nullable=True)  # z1-z5 by NP vs FTP
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class HealthSample(Base):
     """Bucket 3: raw Apple Health samples. Dedup rules land with the
     health-data-pipeline slice, not here."""

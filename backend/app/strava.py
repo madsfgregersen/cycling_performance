@@ -87,6 +87,21 @@ def get_activity(db: Session, activity_id: int) -> dict:
     return response.json()
 
 
+def get_activity_laps(db: Session, activity_id: int) -> list:
+    """The activity's laps (Garmin lap-button presses / auto-laps). Each lap
+    carries start_index/end_index into the activity streams, plus Strava's own
+    per-lap summary. Returns [] if the activity has no laps."""
+    access_token = get_valid_access_token(db)
+    response = httpx.get(
+        f"https://www.strava.com/api/v3/activities/{activity_id}/laps",
+        headers={"Authorization": f"Bearer {access_token}"},
+        timeout=15,
+    )
+    response.raise_for_status()
+    laps = response.json()
+    return laps if isinstance(laps, list) else []
+
+
 def get_athlete_profile(db: Session) -> dict:
     access_token = get_valid_access_token(db)
     response = httpx.get(

@@ -4,9 +4,9 @@ from datetime import datetime, timedelta, timezone
 import httpx
 from sqlalchemy.orm import Session
 
-from . import strava
+from . import ride_laps, strava
 from .activity_log import log_event
-from .models import RideStream, RideSummary
+from .models import RideLap, RideStream, RideSummary
 
 ACTIVITIES_URL = "https://www.strava.com/api/v3/athlete/activities"
 STREAM_KEYS = "time,watts,heartrate,cadence,altitude,velocity_smooth,distance,latlng"
@@ -128,6 +128,7 @@ def ingest_single_activity(db: Session, activity_id: int) -> dict:
     ride = _save_ride_summary(db, activity)
     streams = _fetch_streams(db, activity_id)
     stream_rows = _save_ride_streams(db, ride.id, streams)
+    _sync_laps_safe(db, ride)
     log_event(
         db,
         "strava_webhook",
@@ -135,6 +136,14 @@ def ingest_single_activity(db: Session, activity_id: int) -> dict:
         f"activity {activity_id} imported, {stream_rows} stream rows",
     )
     return {"imported": True, "stream_rows_saved": stream_rows, "ride_id": ride.id}
+
+
+def _sync_laps_safe(db: Session, ride) -> None:
+    # Laps are supplementary -- never let a laps failure break ride ingestion.
+    try:
+        ride_laps.sync_ride_laps(db, ride)
+    except Exception:
+        db.rollback()
 
 
 def delete_activity(db: Session, activity_id: int) -> dict:
@@ -147,6 +156,7 @@ def delete_activity(db: Session, activity_id: int) -> dict:
         log_event(db, "strava_webhook", "ride_delete_skipped", f"activity {activity_id} not found")
         return {"deleted": False}
 
+    db.query(RideLap).filter(RideLap.ride_id == ride.id).delete()
     db.query(RideStream).filter(RideStream.ride_id == ride.id).delete()
     db.delete(ride)
     db.commit()
@@ -174,6 +184,7 @@ def run_backfill(db: Session, days: int = BACKFILL_DAYS) -> dict:
         ride = _save_ride_summary(db, activity)
         streams = _fetch_streams(db, activity["id"])
         stream_rows += _save_ride_streams(db, ride.id, streams)
+        _sync_laps_safe(db, ride)
         imported += 1
         time.sleep(0.5)  # stay comfortably under Strava's rate limit
 

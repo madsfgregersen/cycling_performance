@@ -1,5 +1,6 @@
 import time
 from collections import deque
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
@@ -59,24 +60,21 @@ def _max(xs):
     return max(xs) if xs else None
 
 
-def _compute_lap_metrics(samples: list) -> dict:
-    duration_s = len(samples)  # 1 Hz streams -> one sample per second
+def _computed_from_segment(samples: list, duration_s: int) -> dict:
+    """NP, IF, lap TSS, zone and peak power derived from a lap's time-windowed
+    stream slice. Averages (power/HR/cadence/speed) come from Strava's
+    authoritative lap object instead -- see sync_ride_laps."""
     watts = [s.watts for s in samples]
     np_value = _normalized_power(watts)
     intensity_factor = np_value / FTP_WATTS if np_value else None
     lap_tss = (
         (duration_s * np_value * intensity_factor) / (FTP_WATTS * 3600) * 100
-        if np_value and intensity_factor
+        if np_value and intensity_factor and duration_s
         else None
     )
     return {
-        "avg_power": _avg(watts),
         "normalized_power": round(np_value, 1) if np_value else None,
         "max_power": _max(watts),
-        "avg_hr": _avg([s.heartrate for s in samples]),
-        "max_hr": _max([s.heartrate for s in samples]),
-        "avg_cadence": _avg([s.cadence for s in samples]),
-        "avg_speed": _avg([s.velocity_smooth for s in samples]),
         "intensity_factor": round(intensity_factor, 3) if intensity_factor else None,
         "lap_tss": round(lap_tss, 1) if lap_tss else None,
         "intensity_zone": _zone(np_value),
@@ -102,32 +100,53 @@ def sync_ride_laps(db: Session, ride: RideSummary) -> dict:
 
     db.query(RideLap).filter(RideLap.ride_id == ride.id).delete()
 
+    ride_start = ride.start_date
+
     saved = 0
     for i, lap in enumerate(laps):
-        start_index = lap.get("start_index")
-        end_index = lap.get("end_index")
-        if start_index is None or end_index is None:
+        # Map the lap to OUR stored streams by TIME, not by Strava's array
+        # index. Strava's start_index/end_index index into Strava's own stream
+        # arrays, whose length can differ from the rows we stored (recording
+        # gaps in smart-recorded rides), so positional slicing drifts and
+        # smears per-lap power. The lap's start_date + elapsed_time give an
+        # elapsed-seconds window that lines up with our second_offset.
+        start_iso = lap.get("start_date")
+        elapsed = lap.get("elapsed_time")
+        if start_iso is None or elapsed is None or ride_start is None:
             continue
-        # start_index/end_index are positions into the stream arrays, which we
-        # stored one row per sample in time order.
-        segment = streams[start_index : end_index + 1]
+        try:
+            lap_start = datetime.fromisoformat(str(start_iso).replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            continue
+        start_off = round((lap_start - ride_start).total_seconds())
+        end_off = start_off + int(elapsed) - 1
+        segment = [s for s in streams if start_off <= s.second_offset <= end_off]
         if len(segment) < 3:
             # Skip degenerate laps (a 0-1s trailing lap at the stop) -- they'd
             # show as empty 0-minute laps.
             continue
-        metrics = _compute_lap_metrics(segment)
+        # NP / IF / TSS / zone / peak from the (correctly windowed) slice;
+        # duration for TSS uses Strava's moving_time when present.
+        computed = _computed_from_segment(segment, lap.get("moving_time") or int(elapsed))
         db.add(
             RideLap(
                 ride_id=ride.id,
                 lap_index=i,
-                start_offset_s=segment[0].second_offset,
-                end_offset_s=segment[-1].second_offset,
+                start_offset_s=start_off,
+                end_offset_s=end_off,
                 name=lap.get("name"),
                 distance_m=lap.get("distance"),
                 moving_time_s=lap.get("moving_time"),
-                elapsed_time_s=lap.get("elapsed_time"),
+                elapsed_time_s=int(elapsed),
                 elevation_gain_m=lap.get("total_elevation_gain"),
-                **metrics,
+                # Averages come straight from Strava's lap object so they match
+                # exactly what the athlete sees in Strava.
+                avg_power=lap.get("average_watts"),
+                avg_hr=lap.get("average_heartrate"),
+                max_hr=lap.get("max_heartrate"),
+                avg_cadence=lap.get("average_cadence"),
+                avg_speed=lap.get("average_speed"),
+                **computed,
             )
         )
         saved += 1

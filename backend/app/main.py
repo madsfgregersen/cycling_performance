@@ -168,6 +168,48 @@ def readiness_recompute(db: Session = Depends(get_db)):
     return readiness.recompute(db)
 
 
+@app.get("/debug/laps/{strava_activity_id}")
+def debug_laps(strava_activity_id: int, db: Session = Depends(get_db)):
+    # TEMP diagnostic: compare Strava's lap indices/power to our stored-stream
+    # slice, to find the per-lap power/time misalignment.
+    from . import strava
+    from .models import RideLap, RideStream, RideSummary
+
+    ride = db.query(RideSummary).filter(RideSummary.strava_activity_id == strava_activity_id).first()
+    if ride is None:
+        raise HTTPException(status_code=404, detail="ride not found")
+    laps = strava.get_activity_laps(db, strava_activity_id)
+    streams = (
+        db.query(RideStream).filter(RideStream.ride_id == ride.id).order_by(RideStream.second_offset).all()
+    )
+    offsets = [s.second_offset for s in streams]
+    meta = {
+        "stream_rows": len(streams),
+        "min_offset": offsets[0] if offsets else None,
+        "max_offset": offsets[-1] if offsets else None,
+        "contiguous": (len(offsets) == (offsets[-1] - offsets[0] + 1)) if offsets else None,
+    }
+    out = []
+    for i, lap in enumerate(laps):
+        si, ei = lap.get("start_index"), lap.get("end_index")
+        seg = streams[si : ei + 1] if si is not None and ei is not None else []
+        watts = [s.watts for s in seg if s.watts is not None]
+        our_avg = round(sum(watts) / len(watts)) if watts else None
+        out.append(
+            {
+                "lap": i,
+                "strava_start_index": si,
+                "strava_end_index": ei,
+                "strava_avg_watts": round(lap.get("average_watts")) if lap.get("average_watts") else None,
+                "strava_elapsed_s": lap.get("elapsed_time"),
+                "our_sample_count": len(seg),
+                "our_offset_span_s": (seg[-1].second_offset - seg[0].second_offset + 1) if seg else None,
+                "our_avg_watts": our_avg,
+            }
+        )
+    return {"meta": meta, "laps": out}
+
+
 @app.post("/health/ingest")
 async def ingest_health_data(
     request: Request, token: str = "", db: Session = Depends(get_db)

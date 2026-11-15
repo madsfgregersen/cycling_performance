@@ -3,6 +3,7 @@ uvicorn[standard]
 sqlalchemy
 alembic
 psycopg2-binary
+psycopg[binary]
 httpx
 anthropic
 tzdata

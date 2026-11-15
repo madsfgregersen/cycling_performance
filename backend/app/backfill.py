@@ -12,6 +12,16 @@ ACTIVITIES_URL = "https://www.strava.com/api/v3/athlete/activities"
 STREAM_KEYS = "time,watts,heartrate,cadence,altitude,velocity_smooth,distance,latlng"
 BACKFILL_DAYS = 60
 
+# Strava activity types we treat as a bike ride. The legacy ``type`` field
+# already lumps road/gravel/MTB under "Ride"; "VirtualRide" is Zwift/Swift and
+# other indoor-trainer rides. "EBikeRide" is intentionally excluded -- the motor
+# assist would distort training load.
+BIKE_RIDE_TYPES = {"Ride", "VirtualRide"}
+
+
+def _is_bike_ride(activity: dict) -> bool:
+    return activity.get("type") in BIKE_RIDE_TYPES
+
 
 def _fetch_activities(db: Session, days: int = BACKFILL_DAYS) -> list[dict]:
     access_token = strava.get_valid_access_token(db)
@@ -34,7 +44,7 @@ def _fetch_activities(db: Session, days: int = BACKFILL_DAYS) -> list[dict]:
         activities.extend(batch)
         page += 1
 
-    return [activity for activity in activities if activity.get("type") == "Ride"]
+    return [activity for activity in activities if _is_bike_ride(activity)]
 
 
 def _fetch_streams(db: Session, activity_id: int) -> dict:
@@ -112,9 +122,14 @@ def _save_ride_streams(db: Session, ride_id: int, streams: dict) -> int:
 
 def ingest_single_activity(db: Session, activity_id: int) -> dict:
     activity = strava.get_activity(db, activity_id)
-    if activity.get("type") != "Ride":
-        log_event(db, "strava_webhook", "ride_skipped", f"activity {activity_id} is not a Ride")
-        return {"imported": False, "reason": "not a Ride"}
+    if not _is_bike_ride(activity):
+        log_event(
+            db,
+            "strava_webhook",
+            "ride_skipped",
+            f"activity {activity_id} type={activity.get('type')!r} is not a bike ride",
+        )
+        return {"imported": False, "reason": "not a bike ride"}
 
     exists = (
         db.query(RideSummary)

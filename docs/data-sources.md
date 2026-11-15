@@ -7,14 +7,6 @@ scope — an OAuth2 authorization flow requesting `activity:read_all` and
 `profile:read_all` is required before ride streams can be pulled.
 (Secret and tokens: Railway secrets store only — see `CLAUDE.md`.)
 
-**Which activities count as a ride:** `backfill.BIKE_RIDE_TYPES = {"Ride",
-"VirtualRide"}` (checked via `_is_bike_ride`, used by both the webhook path and
-backfill). `"VirtualRide"` is Zwift/Swift and other indoor-trainer rides —
-Strava labels them with a distinct `type`, so they were silently skipped until
-Nov 2026. `"EBikeRide"` is intentionally excluded (motor assist distorts
-training load); add it to the set if that ever changes. Road/gravel/MTB all
-arrive as legacy `type="Ride"`, so they're already covered.
-
 **Laps** (`ride_laps` table, `ride_laps.py`): the athlete's Garmin lap-button
 presses (and auto-laps), pulled from `/activities/{id}/laps`. Per-lap averages
 (power, HR, cadence, speed, distance, elevation, times) are taken **straight

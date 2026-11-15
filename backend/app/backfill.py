@@ -65,6 +65,7 @@ def _save_ride_summary(db: Session, activity: dict) -> RideSummary:
     ride = RideSummary(
         strava_activity_id=activity["id"],
         name=activity.get("name"),
+        sport_type=activity.get("sport_type") or activity.get("type"),
         start_date=start_date,
         distance_m=activity.get("distance"),
         moving_time_s=activity.get("moving_time"),
@@ -216,3 +217,36 @@ def run_backfill(db: Session, days: int = BACKFILL_DAYS) -> dict:
         "skipped_existing": skipped,
         "stream_rows_saved": stream_rows,
     }
+
+
+def backfill_ride_types(db: Session) -> dict:
+    """One-off: fill sport_type on existing rides that don't have it yet by
+    re-fetching each activity's type from Strava. Idempotent -- only touches
+    rows where sport_type is NULL."""
+    rides = (
+        db.query(RideSummary)
+        .filter(RideSummary.sport_type.is_(None))
+        .order_by(RideSummary.start_date.desc())
+        .all()
+    )
+    updated = 0
+    virtual = 0
+    for ride in rides:
+        try:
+            activity = strava.get_activity(db, ride.strava_activity_id)
+        except Exception as exc:  # noqa: BLE001 -- skip the odd unfetchable ride
+            log_event(db, "strava_backfill", "ride_type_skip", f"{ride.strava_activity_id}: {exc}")
+            continue
+        ride.sport_type = activity.get("sport_type") or activity.get("type")
+        if ride.sport_type == "VirtualRide":
+            virtual += 1
+        updated += 1
+        time.sleep(0.3)  # stay under Strava's rate limit
+    db.commit()
+    log_event(
+        db,
+        "strava_backfill",
+        "ride_types_backfilled",
+        f"updated {updated} rides ({virtual} virtual)",
+    )
+    return {"updated": updated, "virtual": virtual, "remaining_null": 0}

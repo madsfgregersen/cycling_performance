@@ -70,6 +70,7 @@ def _session_shapes(db: Session, rides: list) -> list:
             {
                 "date": ride.start_date.astimezone(LOCAL_TZ).date().isoformat(),
                 "name": ride.name,
+                "virtual": ride.sport_type == "VirtualRide",
                 "tss": round(ride.ride_tss, 1) if ride.ride_tss else None,
                 "moving_min": round(ride.moving_time_s / 60) if ride.moving_time_s else None,
                 "time_in_zone_min": time_in_zone or None,

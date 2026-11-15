@@ -80,6 +80,7 @@ def build_ride_context(db: Session, ride) -> dict:
         "ride": {
             "date": ride_local_date.isoformat(),
             "name": ride.name,
+            "is_virtual": ride.sport_type == "VirtualRide",
             "distance_km": round(ride.distance_m / 1000, 1) if ride.distance_m else None,
             "moving_time_minutes": round(ride.moving_time_s / 60) if ride.moving_time_s else None,
             "elevation_gain_m": ride.elevation_gain_m,
@@ -142,7 +143,11 @@ def explain_ride(db: Session, ride) -> dict:
         "285-295 W'); do NOT enumerate every lap number. Cite the reps' "
         "power/HR, not a lap-by-lap list.\n"
         "If laps is null, you only have whole-ride averages -- don't invent "
-        "interval structure."
+        "interval structure.\n"
+        "If ride.is_virtual is true, this was an indoor/virtual ride (Zwift/Swift "
+        "on a trainer): there is no wind, terrain, descents or GPS, elevation is "
+        "simulated, and power is steadier by nature -- don't attribute anything to "
+        "hills, route or coasting, and don't read into a flat elevation figure."
     )
     return ai_coach.ask_claude_structured(prompt, COACH_SYSTEM_PROMPT, RIDE_DEBRIEF_SCHEMA, category="ride_debrief")
 

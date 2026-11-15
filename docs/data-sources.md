@@ -15,6 +15,16 @@ Nov 2026. `"EBikeRide"` is intentionally excluded (motor assist distorts
 training load); add it to the set if that ever changes. Road/gravel/MTB all
 arrive as legacy `type="Ride"`, so they're already covered.
 
+**Virtual vs outdoor tagging:** `rides_summary.sport_type` stores Strava's
+activity type (`"Ride"` / `"VirtualRide"`), set on ingest from
+`sport_type` (falling back to `type`). `is_virtual = sport_type ==
+"VirtualRide"` surfaces on the `/rides` list and ride detail, drives a
+"Virtual" badge + a Type row on the dashboard, and tells the coach (ride
+debrief + weekly summary) when a session was indoor (no wind/terrain/GPS,
+simulated elevation, trainer power) so it doesn't read anything into route or
+hills. `GET /backfill/ride-types` is a one-off that fills `sport_type` on older
+rides (NULL only) by re-fetching each activity's type from Strava.
+
 **Laps** (`ride_laps` table, `ride_laps.py`): the athlete's Garmin lap-button
 presses (and auto-laps), pulled from `/activities/{id}/laps`. Per-lap averages
 (power, HR, cadence, speed, distance, elevation, times) are taken **straight

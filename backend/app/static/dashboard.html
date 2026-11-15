@@ -826,10 +826,12 @@ function renderWeek(){
       count++;
       var actualTss=sumField(rides,'tss');
       var name=rides.length>1 ? (rides.length+' rides') : (rides[0].name||'Recorded ride');
+      var vbadge=(rides.length===1 && rides[0].is_virtual)
+        ? ' <span style="font-size:9px;font-weight:600;color:var(--violet);border:.5px solid var(--violet);border-radius:4px;padding:0 3px;vertical-align:middle">VIRTUAL</span>' : '';
       var wo=document.createElement('div');
       wo.className='wo done';
       var ctx = planned.length ? '<span class="ctx">planned '+Math.round(sumField(planned,'target_tss'))+'</span>' : '';
-      wo.innerHTML='<span class="t">&#10003; '+escapeHtml(name)+'</span>'
+      wo.innerHTML='<span class="t">&#10003; '+escapeHtml(name)+vbadge+'</span>'
         +'<span class="m">'+Math.round(actualTss)+' TSS'+ctx+'</span>';
       wo.onclick=(function(rides,planned){ return function(){ openRideDetail(rides, planned); }; })(rides, planned);
       cell.appendChild(wo);
@@ -998,6 +1000,7 @@ function fmtMoving(m){ if(m==null)return '—'; var h=Math.floor(m/60), mm=m%60;
 function rideRow(label,val){ return '<div style="display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:5px 0;border-top:.5px solid var(--line)"><span style="color:var(--muted)">'+label+'</span><span style="font-family:var(--mono)">'+val+'</span></div>'; }
 function rideStatsHtml(rd, multi){
   var html = multi ? ('<div style="font-weight:600;font-size:13px;margin-top:10px">'+escapeHtml(rd.name||'Ride')+'</div>') : '';
+  html+=rideRow('Type', rd.is_virtual ? 'Virtual (indoor)' : 'Outdoor');
   html+=rideRow('TSS', rd.tss!=null?Math.round(rd.tss):'—');
   html+=rideRow('Distance', rd.distance_km!=null?rd.distance_km+' km':'—');
   html+=rideRow('Moving time', fmtMoving(rd.moving_minutes));

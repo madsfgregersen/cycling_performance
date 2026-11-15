@@ -125,6 +125,12 @@ def backfill_laps(db: Session = Depends(get_db)):
     return ride_laps.backfill_laps(db)
 
 
+@app.get("/backfill/ride-types")
+def backfill_ride_types(db: Session = Depends(get_db)):
+    # One-off: fill sport_type (outdoor vs VirtualRide) on existing rides.
+    return backfill.backfill_ride_types(db)
+
+
 @app.get("/rides/{strava_activity_id}/laps")
 def ride_laps_view(strava_activity_id: int, db: Session = Depends(get_db)):
     from .models import RideLap
@@ -281,6 +287,7 @@ def list_rides_range(days: int = 180, db: Session = Depends(get_db)):
             "strava_activity_id": r.strava_activity_id,
             "date": r.start_date.astimezone(dashboard.LOCAL_TZ).date().isoformat(),
             "name": r.name,
+            "is_virtual": r.sport_type == "VirtualRide",
             "tss": round(r.ride_tss, 1) if r.ride_tss is not None else None,
             "distance_km": round(r.distance_m / 1000, 1) if r.distance_m else None,
             "moving_minutes": round(r.moving_time_s / 60) if r.moving_time_s else None,

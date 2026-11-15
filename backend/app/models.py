@@ -24,6 +24,9 @@ class RideSummary(Base):
     id = Column(Integer, primary_key=True)
     strava_activity_id = Column(BigInteger, unique=True, nullable=False)
     name = Column(String, nullable=True)
+    # Strava activity type: "Ride" (outdoor) or "VirtualRide" (Zwift/Swift etc.).
+    # Nullable for rows created before this column existed; backfilled from Strava.
+    sport_type = Column(String, nullable=True)
     start_date = Column(DateTime(timezone=True), nullable=False)
     distance_m = Column(Float, nullable=True)
     moving_time_s = Column(Integer, nullable=True)

@@ -118,7 +118,7 @@
 
   <h1>Cycling Performance — Architecture Canvas</h1>
   <div class="sub">A private, personal cycling-training app for one athlete building toward the Geo Park Gran Fondo (30 Aug 2026). Python/FastAPI + Postgres on Railway, with two surfaces (a web dashboard and a Telegram bot) over a shared backend, and an LLM-backed coach layered on top. Read top→bottom: data flows in from the left, is stored in six buckets, computed into readiness, interpreted by the coach, and delivered to the two surfaces.</div>
-  <div class="asof">As of 16 Aug 2026</div>
+  <div class="asof">As of 18 Nov 2026</div>
 
   <!-- LEGEND -->
   <div class="legend">
@@ -137,9 +137,9 @@
   <!-- EXTERNAL -->
   <div class="plane" style="--pc:var(--external)">
     <div class="plabel">External systems</div>
-    <div class="pdesc">Everything the app talks to. Hosted on <b>Railway</b> (managed Postgres + secrets store); <b>Alembic</b> versions the schema at deploy time.</div>
+    <div class="pdesc">Everything the app talks to. Hosted on <b>Railway</b> (managed Postgres + secrets store); <b>Alembic</b> versions the schema at deploy time (<code>alembic upgrade head</code> runs before uvicorn, so a startup crash = 502 on everything). Both Postgres drivers installed — psycopg2 and psycopg v3 — because Railway's <code>DATABASE_URL</code> now selects v3.</div>
     <div class="row">
-      <div class="box"><div class="t">Strava</div><div class="m">Rides: OAuth + webhook (activity created/deleted) + bulk backfill pull.</div></div>
+      <div class="box"><div class="t">Strava</div><div class="m">Rides: OAuth + webhook (activity created/deleted) + bulk backfill pull. Outdoor <i>and</i> virtual (Zwift/Swift). Ready for 64-bit activity IDs (June 2027).</div></div>
       <div class="box"><div class="t">Apple Health → Health Auto Export</div><div class="m">Sleep, HRV, resting HR, wrist temp, respiratory rate. POSTs when phone foregrounds.</div></div>
       <div class="box"><div class="t">Telegram</div><div class="m">Two-way: check-ins &amp; replies in, coach messages out (bot).</div></div>
       <div class="box"><div class="t">Anthropic — Claude</div><div class="m">The only LLM. Powers every coach reasoning &amp; voice output.</div></div>
@@ -156,8 +156,8 @@
       <div class="box"><div class="t"><code>POST /strava/webhook</code></div><div class="m">Ride landed → background task.</div></div>
       <div class="box"><div class="t"><code>POST /health/ingest</code></div><div class="m">HAE payload (token-gated).</div></div>
       <div class="box"><div class="t"><code>POST /telegram/webhook</code></div><div class="m">Athlete reply (secret-gated).</div></div>
-      <div class="box"><div class="t">Manual / setup</div><div class="m"><code>/strava/authorize</code>, <code>/backfill/rides?days=</code>, webhook subscribe.</div></div>
-      <div class="box"><div class="t">Dashboard REST</div><div class="m"><code>/dashboard/data</code>, <code>/planned-workouts</code>, <code>/coach/*</code>, <code>/plan/*</code>, <code>/brief/*</code>, <code>/llm/*</code>, <code>/logs</code>.</div></div>
+      <div class="box"><div class="t">Manual / setup</div><div class="m"><code>/strava/authorize</code>, <code>/backfill/rides?days=</code>, <code>/backfill/laps</code>, <code>/backfill/ride-types</code>, webhook subscribe.</div></div>
+      <div class="box"><div class="t">Dashboard REST</div><div class="m"><code>/dashboard/data</code>, <code>/rides</code> <i>(IDs sent as strings — JS-safe)</i>, <code>/planned-workouts</code>, <code>/coach/*</code>, <code>/plan/*</code>, <code>/brief/*</code>, <code>/llm/*</code>, <code>/logs</code>.</div></div>
     </div>
   </div>
 
@@ -168,7 +168,7 @@
     <div class="plabel">Ingestion modules</div>
     <div class="pdesc">Normalize inbound data and write it to the buckets. Deduping is source-specific.</div>
     <div class="row">
-      <div class="box"><div class="t">strava_webhook + backfill</div><div class="m">Ride summary (bucket 1) + 1&nbsp;Hz streams (bucket 2). Dedup on activity id.</div></div>
+      <div class="box"><div class="t">strava_webhook + backfill</div><div class="m">Ride summary (bucket 1) + 1&nbsp;Hz streams (bucket 2). Dedup on activity id. Accepts <code>Ride</code> + <code>VirtualRide</code> (<code>BIKE_RIDE_TYPES</code>; e-bike excluded) and stores <code>sport_type</code>.</div></div>
       <div class="box"><div class="t">health_ingest</div><div class="m">Raw Apple Health samples (bucket 3). Sleep dedups on <code>sleepStart</code>.</div></div>
       <div class="box"><div class="t">telegram (inbound)</div><div class="m">Check-ins (bucket 4); routes replies to the coach / pending proposals.</div></div>
     </div>
@@ -181,7 +181,7 @@
     <div class="plabel">Data — the six buckets (<code>models.py</code>)</div>
     <div class="pdesc">The locked "keep everything" storage model. Actual history and planned/provisional data never mix.</div>
     <div class="buckets">
-      <div class="bk"><div class="n">1</div><div class="t">rides_summary</div><div class="m">One row per ride + ride TSS.</div></div>
+      <div class="bk"><div class="n">1</div><div class="t">rides_summary</div><div class="m">One row per ride + ride TSS + <code>sport_type</code> (virtual vs outdoor).</div></div>
       <div class="bk"><div class="n">2</div><div class="t">ride_streams</div><div class="m">Second-by-second (1&nbsp;Hz) data.</div></div>
       <div class="bk"><div class="n">3</div><div class="t">health_samples</div><div class="m">Raw Apple Health samples.</div></div>
       <div class="bk"><div class="n">4</div><div class="t">telegram_checkins</div><div class="m">Subjective daily inputs.</div></div>
@@ -200,7 +200,7 @@
     <div class="row">
       <div class="box"><div class="t">readiness.recompute</div><div class="m">Ride TSS → rolling CTL/ATL/TSB → green/amber/red verdict → bucket 5.</div></div>
       <div class="box"><div class="t">ride_metrics</div><div class="m">Efficiency factor &amp; aerobic decoupling from streams.</div></div>
-      <div class="box"><div class="t">ride_laps</div><div class="m">Partitions a ride by the athlete's Garmin lap-button presses → per-lap NP/IF/TSS + Coggan zone (from the stream slice + FTP). Isolates warm-up/cool-down from the work.</div></div>
+      <div class="box"><div class="t">ride_laps</div><div class="m">Partitions a ride by the athlete's Garmin lap-button presses. Laps map to streams <b>by time</b> (not array index); per-lap averages come straight from Strava, NP/IF/TSS + Coggan zone are computed (stream slice + FTP). Isolates warm-up/cool-down from the work.</div></div>
       <div class="box"><div class="t">recovery_signals</div><div class="m">Overnight HRV/RHR/sleep deviations vs baseline. <code>canonical_nights</code> collapses HAE's per-night snapshots.</div></div>
       <div class="box"><div class="t">forward projection</div><div class="m">CTL/ATL/TSB projected from bucket 6. Compute-on-demand; never written back.</div></div>
     </div>
@@ -227,9 +227,9 @@
         <div class="subhead" style="margin-top:11px">Proactive voice (pushed on events; read-only, one-directional)</div>
         <div class="row">
           <div class="box proactive"><div class="t">morning verdict</div><div class="m">coach_morning</div></div>
-          <div class="box proactive"><div class="t">ride debrief</div><div class="m">coach_ride — lap-aware (judges the work reps, not warm-up/cool-down)</div></div>
+          <div class="box proactive"><div class="t">ride debrief</div><div class="m">coach_ride — lap-aware (judges the work reps, not warm-up/cool-down); virtual-aware (no terrain/wind reads indoors)</div></div>
           <div class="box proactive"><div class="t">missed workout</div><div class="m">coach_missed_workout</div></div>
-          <div class="box proactive"><div class="t">weekly summary</div><div class="m">coach_weekly_summary — session/interval-aware (reads each ride's lap structure)</div></div>
+          <div class="box proactive"><div class="t">weekly summary</div><div class="m">coach_weekly_summary — session/interval-aware (reads each ride's lap structure + virtual flag)</div></div>
           <div class="box proactive"><div class="t">constraint drift</div><div class="m">coach_constraint_drift</div></div>
         </div>
       </div>
@@ -248,7 +248,7 @@
     <div class="plabel">Surfaces — two thin windows onto one coach thread</div>
     <div class="pdesc">Same backend, same conversation. A message sent from either surface is visible on both.</div>
     <div class="row">
-      <div class="box" style="flex-basis:100%"><div class="t">Dashboard SPA — <code>static/dashboard.html</code></div><div class="m"><b>Now</b> (verdict, load chart, recovery tiles) · <b>Plan</b> (calendar, projection, docked coach; ride modal shows per-lap detail — zone strip + table) · <b>Plan brief</b> (goal, constraints, full coach thread) · <b>Messaging</b> (push toggles) · <b>Logs</b> (LLM cost monitor + model switcher + event log).</div></div>
+      <div class="box" style="flex-basis:100%"><div class="t">Dashboard SPA — <code>static/dashboard.html</code></div><div class="m"><b>Now</b> (verdict, load chart, recovery tiles) · <b>Plan</b> (calendar, projection, docked coach; VIRTUAL badge on indoor rides; ride modal shows Type + per-lap detail — zone strip + table) · <b>Plan brief</b> (goal, constraints, full coach thread) · <b>Messaging</b> (push toggles) · <b>Logs</b> (LLM cost monitor + model switcher + event log).</div></div>
       <div class="box"><div class="t">Telegram</div><div class="m">Input + nudge: morning verdict &amp; check-in out, replies in. Dashboard messages echo here as native blockquotes.</div></div>
     </div>
   </div>
@@ -288,6 +288,7 @@
     <div class="callout"><div class="t">Propose → confirm → write</div><div class="m">Any coach action that changes the calendar proposes first, waits for an explicit yes, then writes. Guardrails (taper/event date) are enforced in code twice — at propose and at apply — never left to the prompt.</div></div>
     <div class="callout"><div class="t">One coach brain, thin adapters</div><div class="m">Dashboard and Telegram are two I/O adapters onto one orchestrator + one shared voice. The LLM is reached only through <code>ai_coach</code>, which fails safe and logs cost.</div></div>
     <div class="callout"><div class="t">Compute-on-demand projection</div><div class="m">The forward CTL/ATL/TSB curve is computed from planned workouts when asked — never written back to the sacred readiness bucket.</div></div>
+    <div class="callout"><div class="t">Strava is the source of truth</div><div class="m">Where Strava already computed a number (lap averages, activity type), we take it as-is so the app matches what the athlete sees in Strava; we compute only what Strava doesn't (NP, IF, TSS, zones). Laps are aligned to our streams by time, never by array position.</div></div>
     <div class="callout"><div class="t">Event-driven fan-outs</div><div class="m">Two webhooks + one authed POST drive everything; each proactive push dedupes on its own key, so re-arriving data the same day is a no-op.</div></div>
   </div>
 
@@ -298,6 +299,7 @@
 
     <h3>Changelog</h3>
     <ul class="chg">
+      <li><span class="d">2026-11-18</span>Lap accuracy: laps now map to streams by time (index slicing drifted on smart-recorded rides) and per-lap averages come straight from Strava. Virtual rides: Zwift/Swift (<code>VirtualRide</code>) now ingest; new <code>rides_summary.sport_type</code> column tags virtual vs outdoor → VIRTUAL badge + Type row on the dashboard, and the ride debrief/weekly summary know when a session was indoor; <code>/backfill/ride-types</code> tagged history. Infra: added psycopg v3 driver after Railway's <code>DATABASE_URL</code> switch crashed startup. Strava 64-bit ID readiness: browser-facing ride IDs sent as strings. New decision callout: "Strava is the source of truth". Ride-modal UX: sticky close, m:ss lap times.</li>
       <li><span class="d">2026-08-16</span>Ride laps: capture the athlete's Garmin lap-button partition (<code>ride_laps</code> table + module) with per-lap NP/IF/TSS + Coggan zone; the ride debrief and weekly summary are now lap/interval-aware (recognize interval types — over-unders, threshold, VO2 — and evaluate the work, not warm-up/cool-down). Also since the initial canvas: app timezone fix (<code>localtime</code>, CET/DST-aware, replacing hardcoded UTC+9); multi-tracker sleep merge + morning-verdict hour gate; resting-HR revision upsert; home-screen icon + <code>/static</code> mount.</li>
       <li><span class="d">2026-07-16</span>Initial canvas — full snapshot: six buckets + supporting tables, ingestion, compute, the coach brain (4 reactive branches + 5 proactive modules), both surfaces, and the two hot-paths.</li>
     </ul>

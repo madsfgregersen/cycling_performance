@@ -259,7 +259,9 @@ def rides_recent(limit: int = 10, db: Session = Depends(get_db)):
     )
     return [
         {
-            "strava_activity_id": r.strava_activity_id,
+            # String, not number: Strava IDs go 64-bit (June 2027), beyond
+            # JavaScript's exact-integer range -- see docs/data-sources.md.
+            "strava_activity_id": str(r.strava_activity_id),
             "date": r.start_date.isoformat(),
             "name": r.name,
             "distance_km": round(r.distance_m / 1000, 1) if r.distance_m else None,
@@ -284,7 +286,8 @@ def list_rides_range(days: int = 180, db: Session = Depends(get_db)):
     out = []
     for r in rows:
         out.append({
-            "strava_activity_id": r.strava_activity_id,
+            # String, not number -- see the note in rides_recent above.
+            "strava_activity_id": str(r.strava_activity_id),
             "date": r.start_date.astimezone(dashboard.LOCAL_TZ).date().isoformat(),
             "name": r.name,
             "is_virtual": r.sport_type == "VirtualRide",

@@ -7,6 +7,16 @@ scope — an OAuth2 authorization flow requesting `activity:read_all` and
 `profile:read_all` is required before ride streams can be pulled.
 (Secret and tokens: Railway secrets store only — see `CLAUDE.md`.)
 
+**64-bit IDs (Strava change, effective June 1, 2027):** activity and athlete
+`id`s may exceed JavaScript's exact-integer range (2^53). Backend is safe:
+`rides_summary.strava_activity_id` is `BigInteger`, and Python ints/`json`
+are exact at any size (so we keep reading `id`, not `id_str`). The only risk
+was the browser: the dashboard-facing ride lists (`/rides`, `/rides/recent`)
+therefore send `strava_activity_id` as a **string**, which the dashboard only
+concatenates into URLs (`/rides/{id}`, `/rides/{id}/laps`; FastAPI parses the
+path back to int). Keep any new browser-facing ID fields as strings too. We
+don't store athlete IDs.
+
 **Which activities count as a ride:** `backfill.BIKE_RIDE_TYPES = {"Ride",
 "VirtualRide"}` (checked via `_is_bike_ride`, used by both the webhook path and
 backfill). `"VirtualRide"` is Zwift/Swift and other indoor-trainer rides —
